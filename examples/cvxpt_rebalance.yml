@@ -1,0 +1,19 @@
+alpha:
+  name: rebalance_sim
+  universe:
+    path: '../data/SP100_2010.csv'
+    ticker_col: Symbol
+    risk_free_symbol: USDOLLAR
+  drop_threshold: 0.5
+  data:
+    name: eod_returns
+    source: quandl
+    table: EOD
+    freq: 'weekly'
+    api_key: 6XyApK2BBj_MraQg2TMD
+  model:
+    start_date: '20170102'
+    end_date: '20181231'
+    data_dir: '../data/'
+    alpha: 0.1
+    min_periods: 60
