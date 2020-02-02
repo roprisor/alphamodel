@@ -15,5 +15,6 @@ alpha:
     start_date: '20170102'
     end_date: '20181231'
     data_dir: '../data/'
-    alpha: 0.1
-    min_periods: 60
+    lambda: 0.1
+    horizon: 1
+    min_periods: 10

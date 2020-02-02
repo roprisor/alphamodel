@@ -1,5 +1,5 @@
 """
-Single stock returns - exponentially weighted moving average model
+Single stock returns - ex-post returns randomized by a scaling factor
 """
 
 import numpy as np
@@ -8,10 +8,10 @@ import pickle
 from .model import Model
 from os import path
 
-__all__ = ['SingleStockEWM']
+__all__ = ['SingleStockExPost']
 
 
-class SingleStockEWM(Model):
+class SingleStockExPost(Model):
 
     def train(self, force=False):
         """
@@ -45,6 +45,26 @@ class SingleStockEWM(Model):
 
         return False
 
+    def returns_expost(self, returns):
+        """
+        Construct r_ex(horizon, lambda) = lambda * r_ex(horizon) + (1-lambda) * noise, where noise = N(0, sd(r_ex))
+
+        :param returns:
+        :return:
+        """
+        # Input validation
+        if 'horizon' not in self.cfg or 'lambda' not in self.cfg:
+            raise ValueError('SingleStockExPost: Model config requires both a horizon (periods forward) and a lambda '
+                             'value (how much of expost returns to keep, 0 to 1) to run.')
+
+        # r_ex(horizon)
+        r_ex = returns.rolling(self.cfg['horizon']).sum().shift(-1, fill_value=0)
+
+        # noise, where noise = N(0, sd(r_ex(horizon))) - shape(r_ex)
+        noise = np.random.normal([0] * len(r_ex.std()), r_ex.std(), r_ex.shape)
+
+        return (self.cfg['lambda'] * r_ex).add((1 - self.cfg['lambda']) * noise).dropna()
+
     def predict(self):
         """
         Prediction function for model, for out of sample historical test set
@@ -58,8 +78,8 @@ class SingleStockEWM(Model):
         realized_returns = self.realized['returns']
         print("Typical variance of returns: %g" % realized_returns.var().mean())
 
-        self.predicted['returns'] = realized_returns.ewm(alpha=alpha, min_periods=min_periods).mean().shift(1).dropna()
-        self.predicted['volumes'] = self.realized['volumes'].ewm(alpha=alpha, min_periods=min_periods).mean().shift(1). \
+        self.predicted['returns'] = self.returns_expost(realized_returns)
+        self.predicted['volumes'] = self.realized['volumes'].ewm(alpha=alpha, min_periods=min_periods).mean().shift(1).\
             dropna()
         self.predicted['sigmas'] = self.realized['sigmas'].shift(1).dropna()
         self.predicted['covariance'] = realized_returns.ewm(alpha=alpha, min_periods=min_periods).cov(). \
@@ -85,6 +105,6 @@ class SingleStockEWM(Model):
 
 
 if __name__ == '__main__':
-    ss_ewm_model = SingleStockEWM('../examples/cvxpt_rebalance.yml')
+    ss_ewm_model = SingleStockExPost('../examples/cvxpt_rebalance.yml')
     ss_ewm_model.train()
     ss_ewm_model.predict()
