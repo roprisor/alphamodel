@@ -70,6 +70,11 @@ class SingleStockExPost(Model):
         Prediction function for model, for out of sample historical test set
         :return: n/a (all data stored in self.predicted)
         """
+        # Input validation
+        if 'alpha' not in self.cfg or 'min_periods' not in self.cfg:
+            raise ValueError('SingleStockExPost: Model config requires both min_periods (periods backwards) and an '
+                             'alpha value (decay of historical values, 0 to 1) to run.')
+
         # ## Load up model configs
         alpha = self.cfg['alpha']
         min_periods = self.cfg['min_periods']
@@ -94,8 +99,8 @@ class SingleStockExPost(Model):
         :param statistic:
         :return:
         """
-        agree_on_sign = np.sign(self.realized['returns'].iloc[60:, :-1]) == \
-                        np.sign(self.predicted['returns'].iloc[:, :-1])
+        agree_on_sign = np.sign(self.realized['returns'].iloc[:, :-1]) == \
+                            np.sign(self.predicted['returns'].iloc[:, :-1])
         print("Return predictions have the right sign %.1f%% of the times" %
               (100 * agree_on_sign.sum().sum() / (agree_on_sign.shape[0] * (agree_on_sign.shape[1] - 1))))
         pass
@@ -105,6 +110,7 @@ class SingleStockExPost(Model):
 
 
 if __name__ == '__main__':
-    ss_ewm_model = SingleStockExPost('../examples/cvxpt_rebalance.yml')
-    ss_ewm_model.train()
-    ss_ewm_model.predict()
+    ss_ep_model = SingleStockExPost('../examples/cvxpt_rebalance.yml')
+    ss_ep_model.train(False)
+    ss_ep_model.predict()
+    ss_ep_model.prediction_quality()

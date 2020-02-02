@@ -50,6 +50,11 @@ class SingleStockEWM(Model):
         Prediction function for model, for out of sample historical test set
         :return: n/a (all data stored in self.predicted)
         """
+        # Input validation
+        if 'alpha' not in self.cfg or 'min_periods' not in self.cfg:
+            raise ValueError('SingleStockExPost: Model config requires both min_periods (periods backwards) and an '
+                             'alpha value (decay of historical values, 0 to 1) to run.')
+
         # ## Load up model configs
         alpha = self.cfg['alpha']
         min_periods = self.cfg['min_periods']
@@ -74,7 +79,7 @@ class SingleStockEWM(Model):
         :param statistic:
         :return:
         """
-        agree_on_sign = np.sign(self.realized['returns'].iloc[60:, :-1]) == \
+        agree_on_sign = np.sign(self.realized['returns'].iloc[:, :-1]) == \
                         np.sign(self.predicted['returns'].iloc[:, :-1])
         print("Return predictions have the right sign %.1f%% of the times" %
               (100 * agree_on_sign.sum().sum() / (agree_on_sign.shape[0] * (agree_on_sign.shape[1] - 1))))
