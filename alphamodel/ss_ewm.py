@@ -83,7 +83,6 @@ class SingleStockEWM(Model):
                         np.sign(self.predicted['returns'].iloc[:, :-1])
         print("Return predictions have the right sign %.1f%% of the times" %
               (100 * agree_on_sign.sum().sum() / (agree_on_sign.shape[0] * (agree_on_sign.shape[1] - 1))))
-        pass
 
     def show_results(self):
         pass

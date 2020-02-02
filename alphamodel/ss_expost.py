@@ -58,7 +58,7 @@ class SingleStockExPost(Model):
                              'value (how much of expost returns to keep, 0 to 1) to run.')
 
         # r_ex(horizon)
-        r_ex = returns.rolling(self.cfg['horizon']).sum().shift(-1, fill_value=0)
+        r_ex = returns.rolling(self.cfg['horizon']).sum()
 
         # noise, where noise = N(0, sd(r_ex(horizon))) - shape(r_ex)
         noise = np.random.normal([0] * len(r_ex.std()), r_ex.std(), r_ex.shape)
@@ -103,7 +103,6 @@ class SingleStockExPost(Model):
                             np.sign(self.predicted['returns'].iloc[:, :-1])
         print("Return predictions have the right sign %.1f%% of the times" %
               (100 * agree_on_sign.sum().sum() / (agree_on_sign.shape[0] * (agree_on_sign.shape[1] - 1))))
-        pass
 
     def show_results(self):
         pass
