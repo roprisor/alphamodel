@@ -4,11 +4,13 @@ Alpha Model Base Template
 
 import pandas as pd
 import numpy as np
+import pickle
 import yaml
 
 from abc import ABCMeta, abstractmethod
 from .data_set import TimeSeriesDataSet
 from datetime import datetime
+from os import path
 
 __all__ = ['Model']
 
@@ -90,21 +92,36 @@ class Model(metaclass=ABCMeta):
         """
         return self.data_dir + 'model_' + self.name + '_' + datetime.today().strftime('%Y%m%d') + '.mdl'
 
-    @abstractmethod
     def save(self):
         """
-        Save model to h5 or pickle file
-        :return:
+        Save all data in class
+        :return: n/a
         """
-        pass
+        f = open(self.filename, 'wb')
+        pickle.dump(self.__dict__, f, 2)
+        f.close()
 
-    @abstractmethod
     def load(self):
         """
-        Save model to h5 or pickle file
-        :return:
+        Load back data from file
+        :return: success bool
         """
-        pass
+        if path.exists(self.filename):
+            # Load class from file
+            f = open(self.filename, 'rb')
+            tmp_dict = pickle.load(f)
+            f.close()
+
+            # Save config
+            cfg = self.cfg
+
+            # Reload class from file, but keep current config
+            self.__dict__.clear()
+            self.__dict__.update(tmp_dict)
+            self.cfg = cfg
+            return True
+
+        return False
 
     @abstractmethod
     def train(self, **kwargs):

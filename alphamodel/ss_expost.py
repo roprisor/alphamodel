@@ -3,10 +3,8 @@ Single stock returns - ex-post returns randomized by a scaling factor
 """
 
 import numpy as np
-import pickle
 
 from .model import Model
-from os import path
 
 __all__ = ['SingleStockExPost']
 
@@ -19,31 +17,6 @@ class SingleStockExPost(Model):
         :return:
         """
         return self._fetch_data(force)
-
-    def save(self):
-        """
-        Save all data in class
-        :return: n/a
-        """
-        f = open(self.filename, 'wb')
-        pickle.dump(self.__dict__, f, 2)
-        f.close()
-
-    def load(self):
-        """
-        Load back data from file
-        :return: success bool
-        """
-        if path.exists(self.filename):
-            f = open(self.filename, 'rb')
-            tmp_dict = pickle.load(f)
-            f.close()
-
-            self.__dict__.clear()
-            self.__dict__.update(tmp_dict)
-            return True
-
-        return False
 
     def returns_expost(self, returns):
         """
