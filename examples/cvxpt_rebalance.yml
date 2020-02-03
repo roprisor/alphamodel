@@ -9,12 +9,13 @@ alpha:
     name: eod_returns
     source: quandl
     table: EOD
-    freq: 'weekly'
+    freq: 'monthly'
     api_key: 6XyApK2BBj_MraQg2TMD
   model:
-    start_date: '20170102'
-    end_date: '20181231'
+    start_date: '20100102'
+    end_date: '20171231'
     data_dir: '../data/'
-    lambda: 0.1
+    alpha: 1
+    lambda: 0.8
     horizon: 1
     min_periods: 10
