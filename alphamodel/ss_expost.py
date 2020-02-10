@@ -16,7 +16,7 @@ class SingleStockExPost(Model):
         Training function for model
         :return:
         """
-        return self._fetch_data(force)
+        return self._fetch_base_data(force)
 
     def returns_expost(self, returns):
         """

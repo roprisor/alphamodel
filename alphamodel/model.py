@@ -4,6 +4,7 @@ Alpha Model Base Template
 
 import pandas as pd
 import numpy as np
+import pandas_datareader.data as pdr
 import pickle
 import yaml
 
@@ -134,13 +135,24 @@ class Model(metaclass=ABCMeta):
 
     def _fetch_data(self, force=False):
         """
-        Training function for model
-        :return:
+        Base data fetching function for model
+        :param force: force refetch
+        :return: success bool
         """
         # If we can load past state from file, let's just do that
         if not force and self.load():
             return True
 
+        success = self._fetch_return_data() and self._fetch_factor_data()
+
+        self.save()
+        return success
+
+    def _fetch_return_data(self, force=False):
+        """
+        Training function for model
+        :return:
+        """
         data = {}
 
         # #### Download loop
@@ -254,7 +266,19 @@ class Model(metaclass=ABCMeta):
         self.realized['sigmas'] = sigmas
         self.realized['volumes'] = volumes
 
-        self.save()
+        return True
+
+    def _fetch_factor_data(self):
+        """
+        Training function for model
+        :return:
+        """
+        ds = pdr.DataReader('North_America_5_Factors_Daily', 'famafrench',
+                            start=self.cfg['start_date'], end=self.cfg['end_date'])
+        ff_returns = ds[0]
+        ff_returns.index = ff_returns.index.to_timestamp()
+        self.realized['ff_returns'] = ff_returns
+
         return True
 
     @abstractmethod
