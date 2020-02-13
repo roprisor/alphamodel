@@ -61,7 +61,9 @@ class SingleStockEWM(Model):
             realized_returns = self.get('returns', data_type='realized', sampling_freq=SamplingFrequency.DAY)
 
             update = self.cfg['covariance']['update'] if 'update' in self.cfg['covariance'] else 'monthly'
-            if update == 'monthly':
+            if update == 'quarterly':
+                update_freq = '3M'
+            elif update == 'monthly':
                 update_freq = 'M'
             elif update == 'biweekly':
                 update_freq = '2W'
