@@ -9,7 +9,6 @@ alpha:
     name: eod_returns
     source: quandl
     table: EOD
-    freq: daily
     api_key: 6XyApK2BBj_MraQg2TMD
   model:
     start_date: '20100102'
@@ -19,6 +18,9 @@ alpha:
     lambda: 0.8
     horizon: 1
     min_periods: 10
+    returns:
+      sampling_freq: monthly
     covariance:
       method: FF5
-      freq: monthly
+      sampling_freq: daily
+      update: monthly

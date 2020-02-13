@@ -5,7 +5,7 @@ Single stock returns - exponentially weighted moving average model
 import numpy as np
 import pandas as pd
 
-from .model import Model
+from .model import Model, SamplingFrequency
 from sklearn import linear_model
 
 __all__ = ['SingleStockEWM']
@@ -18,7 +18,7 @@ class SingleStockEWM(Model):
         Training function for model
         :return:
         """
-        return self._fetch_data(force)
+        return self._fetch_base_data(force)
 
     def predict(self):
         """
@@ -36,39 +36,44 @@ class SingleStockEWM(Model):
 
         # ## Estimates
         # Returns
-        realized_returns = self.realized['returns']
+        realized_returns = self.get('returns', data_type='realized', sampling_freq=self.cfg['returns']['sampling_freq'])
+        realized_volumes = self.get('volumes', data_type='realized', sampling_freq=self.cfg['returns']['sampling_freq'])
+        realized_sigmas = self.get('sigmas', data_type='realized', sampling_freq=self.cfg['returns']['sampling_freq'])
         print("Typical variance of returns: %g" % realized_returns.var().mean())
 
-        self.predicted['returns'] = realized_returns.ewm(alpha=alpha, min_periods=min_periods).mean().shift(1).dropna()
+        self.set('returns', realized_returns.ewm(alpha=alpha, min_periods=min_periods).mean().shift(1).dropna(),
+                 'predicted')
 
         # Volumes & sigmas
-        self.predicted['volumes'] = self.realized['volumes'].ewm(alpha=alpha, min_periods=min_periods).mean().shift(1).\
-            dropna()
-        self.predicted['sigmas'] = self.realized['sigmas'].shift(1).dropna()
+        self.set('volumes', realized_volumes.ewm(alpha=alpha, min_periods=min_periods).mean().shift(1).dropna(),
+                 'predicted')
+        self.set('sigmas', realized_sigmas.shift(1).dropna(), 'predicted')
 
         # Covariance
         if 'covariance' not in self.cfg:
             raise NotImplemented('Covariance section needs to be defined under SS EWM model config.')
         elif self.cfg['covariance']['method'] == 'SS':
-            self.predicted['covariance'] = realized_returns.ewm(alpha=alpha, min_periods=min_periods).cov(). \
-                shift(realized_returns.shape[1]).dropna()
+            self.set('covariance', realized_returns.ewm(alpha=alpha, min_periods=min_periods).cov().
+                     shift(realized_returns.shape[1]).dropna(), 'predicted', self.cfg['covariance']['sampling_freq'])
         elif self.cfg['covariance']['method'] == 'FF5':
             # Fetch data
-            ff_returns = self.realized['ff_returns']
-            freq = self.cfg['covariance']['freq']
-            if freq == 'monthly':
-                freq_str = 'M'
-            elif freq == 'biweekly':
-                freq_str = '2W'
-            elif freq == 'weekly':
-                freq_str = 'W'
+            ff_returns = self.get('ff_returns', 'realized', SamplingFrequency.DAY)
+            realized_returns = self.get('returns', data_type='realized', sampling_freq=SamplingFrequency.DAY)
+
+            update = self.cfg['covariance']['update'] if 'update' in self.cfg['covariance'] else 'monthly'
+            if update == 'monthly':
+                update_freq = 'M'
+            elif update == 'biweekly':
+                update_freq = '2W'
+            elif update == 'weekly':
+                update_freq = 'W'
             else:
-                raise NotImplemented('Freq under covariance only supports: month, biweekly, weekly.')
+                raise NotImplemented('Update freq under covariance only supports: month, biweekly, weekly.')
 
             # Generate computation frequency
             first_days = pd.date_range(start=realized_returns.index[max(self.cfg['min_periods'] + 1, 90)],
                                        end=realized_returns.index[-1],
-                                       freq=freq_str)
+                                       freq=update_freq)
 
             # Use ML regression to obtain factor loadings. Then factor covariance and stock idiosyncratic variances
             exposures, factor_sigma, idyos = {}, {}, {}
@@ -99,9 +104,10 @@ class SingleStockEWM(Model):
                                        index=realized_returns.columns).fillna(method='ffill')
                 idyos[day][idyos[day] < 0] = 0
 
-            self.predicted['factor_sigma'] = pd.concat(factor_sigma.values(), axis=0, keys=factor_sigma.keys())
-            self.predicted['exposures'] = pd.concat(exposures.values(), axis=0, keys=exposures.keys())
-            self.predicted['idyos'] = pd.DataFrame(idyos).T
+            self.set('factor_sigma', pd.concat(factor_sigma.values(), axis=0, keys=factor_sigma.keys()), 'predicted')
+            self.set('exposures', pd.concat(exposures.values(), axis=0, keys=exposures.keys()), 'predicted')
+            self.set('idyos', pd.DataFrame(idyos).T, 'predicted')
+
         else:
             raise NotImplemented('Covariance section needs to be defined under SSEWM moodel config and needs definition'
                                  ' of method: SS (single stock returns) or FF5 (Fama French 5 factor returns).')
