@@ -60,7 +60,7 @@ class SingleStockEWM(Model):
             ff_returns = self.get('ff_returns', 'realized', SamplingFrequency.DAY)
             realized_returns = self.get('returns', data_type='realized', sampling_freq=SamplingFrequency.DAY)
 
-            update = self.cfg['covariance']['update'] if 'update' in self.cfg['covariance'] else 'monthly'
+            update = self.cfg['covariance']['sampling_freq'] if 'sampling_freq' in self.cfg['covariance'] else 'monthly'
             if update == 'quarterly':
                 update_freq = '3M'
             elif update == 'monthly':
@@ -76,26 +76,32 @@ class SingleStockEWM(Model):
             first_days = pd.date_range(start=realized_returns.index[max(self.cfg['min_periods'] + 1, 90)],
                                        end=realized_returns.index[-1],
                                        freq=update_freq)
+            days_back = self.cfg['covariance']['train_days'] if 'train_days' in self.cfg['covariance'] else 90
 
             # Use ML regression to obtain factor loadings. Then factor covariance and stock idiosyncratic variances
             exposures, factor_sigma, idyos = {}, {}, {}
 
             # Every first day in each biweekly period
+            cov_rscore = []
             for day in first_days:
                 print('Running for {}'.format(day.strftime('%Y %b %d')))
 
-                # Grab asset returns for preceding 90 days
+                # Grab asset returns for preceding train_days (90 by default)
                 used_returns = realized_returns.loc[(realized_returns.index < day) &
-                                           (realized_returns.index >= day - pd.Timedelta("90 days"))]
+                                           (realized_returns.index >= day - pd.Timedelta(str(days_back) + " days"))]
                 used_ff_returns = ff_returns.loc[ff_returns.index.isin(used_returns.index)].iloc[:, :-1]
 
                 # Multi linear regression to extract factor loadings
                 mlr = linear_model.LinearRegression()
                 mlr.fit(used_ff_returns, used_returns)
                 mlr.predict(used_ff_returns)
-                print('predict_cov_FF5: mlr score = {s}'.format(s=mlr.score(used_ff_returns, used_returns)))
 
-                # Factor covariance - on EWMA of FF returns
+                # Track performance of FF fit
+                rscore = mlr.score(used_ff_returns, used_returns)
+                cov_rscore.append(rscore)
+                print('predict_cov_FF5: mlr score = {s}'.format(s=rscore))
+
+                # Factor covariance - on FF returns
                 factor_sigma[day] = used_ff_returns.cov().fillna(0)
                 # Exposures - factor loadings obtained from multi linear regression coefficients of stock on FF factors
                 exposures[day] = pd.DataFrame(data=mlr.coef_, index=realized_returns.columns).fillna(0)
@@ -109,6 +115,9 @@ class SingleStockEWM(Model):
             self.set('factor_sigma', pd.concat(factor_sigma.values(), axis=0, keys=factor_sigma.keys()), 'predicted')
             self.set('exposures', pd.concat(exposures.values(), axis=0, keys=exposures.keys()), 'predicted')
             self.set('idyos', pd.DataFrame(idyos).T, 'predicted')
+            self.set('cov_rscore', pd.DataFrame.from_dict({'date': first_days,
+                                                           'rscore': cov_rscore,
+                                                           'train_days': days_back}), 'predicted')
 
         else:
             raise NotImplemented('Covariance section needs to be defined under SSEWM moodel config and needs definition'
