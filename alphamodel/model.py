@@ -71,7 +71,7 @@ class Model(metaclass=ABCMeta):
         Retrieve universe == list of symbols we want to trade
         :return: list of strings
         """
-        return [s for s in self._universe if s != self.risk_free_symbol]
+        return self._universe
 
     @property
     def _realized(self):
