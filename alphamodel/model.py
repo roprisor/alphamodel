@@ -45,10 +45,12 @@ class Model(metaclass=ABCMeta):
 
         try:
             if 'list' in cfg['universe']:
-                self.universe = cfg['universe']['list']
+                self._universe = cfg['universe']['list']
             elif 'path' in cfg['universe']:
-                self.universe = pd.read_csv(cfg['universe']['path'])[cfg['universe']['ticker_col']].to_list()
+                self._universe = pd.read_csv(cfg['universe']['path'])[cfg['universe']['ticker_col']].to_list()
             self.risk_free_symbol = cfg['universe']['risk_free_symbol']
+            if self.risk_free_symbol not in self._universe:
+                self._universe.append(self.risk_free_symbol)
         except ValueError:
             raise NotImplemented('Model\'s universe can only be a a dict w/ (list, risk_free_symbol) or '
                                  '(path, ticker_col, risk_free_symbol)')
@@ -62,6 +64,14 @@ class Model(metaclass=ABCMeta):
             self.__predicted[freq] = {}
         self.__removed_assets = set()
         self.__removed_dates = set()
+
+    @property
+    def universe(self):
+        """
+        Retrieve universe == list of symbols we want to trade
+        :return: list of strings
+        """
+        return [s for s in self._universe if s != self.risk_free_symbol]
 
     @property
     def _realized(self):
@@ -271,7 +281,7 @@ class Model(metaclass=ABCMeta):
 
         # Download asset data & construct a data dictionary: {ticker: pd.DataFrame(price/volume)}
         # If Quandl complains about the speed of requests, try adding sleep time.
-        for ticker in self.universe:
+        for ticker in self._universe:
             if ticker in raw_data:
                 continue
             print('downloading %s from %s to %s' % (ticker, self.cfg['start_date'], self.cfg['end_date']))
@@ -282,7 +292,7 @@ class Model(metaclass=ABCMeta):
 
         # #### Computation
 
-        keys = [el for el in self.universe if el not in (set(self.universe) - set(raw_data.keys()))]
+        keys = [el for el in self._universe if el not in (set(self._universe) - set(raw_data.keys()))]
 
         def select_first_valid_column(df, columns):
             for column in columns:

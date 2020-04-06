@@ -27,7 +27,7 @@ class SingleStockEWM(Model):
         """
         # Input validation
         if 'alpha' not in self.cfg or 'min_periods' not in self.cfg:
-            raise ValueError('SingleStockExPost: Model config requires both min_periods (periods backwards) and an '
+            raise ValueError('SingleStockEWM: Model config requires both min_periods (periods backwards) and an '
                              'alpha value (decay of historical values, 0 to 1) to run.')
 
         # ## Load up model configs
