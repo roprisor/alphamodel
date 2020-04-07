@@ -48,9 +48,10 @@ class Model(metaclass=ABCMeta):
                 self._universe = cfg['universe']['list']
             elif 'path' in cfg['universe']:
                 self._universe = pd.read_csv(cfg['universe']['path'])[cfg['universe']['ticker_col']].to_list()
-            self.risk_free_symbol = cfg['universe']['risk_free_symbol']
-            if self.risk_free_symbol not in self._universe:
-                self._universe.append(self.risk_free_symbol)
+            if cfg['universe']['risk_free_symbol']:
+                self.risk_free_symbol = cfg['universe']['risk_free_symbol']
+            else:
+                self.risk_free_symbol = 'USDOLLAR'
         except ValueError:
             raise NotImplemented('Model\'s universe can only be a a dict w/ (list, risk_free_symbol) or '
                                  '(path, ticker_col, risk_free_symbol)')
@@ -71,7 +72,7 @@ class Model(metaclass=ABCMeta):
         Retrieve universe == list of symbols we want to trade
         :return: list of strings
         """
-        return self._universe
+        return [s for s in self._universe if s != self.risk_free_symbol]
 
     @property
     def _realized(self):
