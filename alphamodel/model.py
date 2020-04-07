@@ -52,6 +52,8 @@ class Model(metaclass=ABCMeta):
                 self.risk_free_symbol = cfg['universe']['risk_free_symbol']
             else:
                 self.risk_free_symbol = 'USDOLLAR'
+            if self.risk_free_symbol not in self._universe:
+                self._universe.append(self.risk_free_symbol)
         except ValueError:
             raise NotImplemented('Model\'s universe can only be a a dict w/ (list, risk_free_symbol) or '
                                  '(path, ticker_col, risk_free_symbol)')

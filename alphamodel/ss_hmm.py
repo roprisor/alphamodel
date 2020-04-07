@@ -267,6 +267,6 @@ class SingleStockHMM(Model):
 
 if __name__ == '__main__':
     ss_hmm_model = SingleStockHMM('../examples/cvxpt_hmm.yml')
-    ss_hmm_model.train()
+    ss_hmm_model.train(force=True)
     ss_hmm_model.predict()
     ss_hmm_model.prediction_quality()
