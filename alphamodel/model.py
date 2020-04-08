@@ -406,10 +406,12 @@ class Model(metaclass=ABCMeta):
                 volumes = volumes.loc[~volumes.index.isin(bad_dates_idx)]
 
             # Fix prices
-            print(pd.DataFrame({'remaining nan price': prices.isnull().sum(),
-                                'remaining nan open price': open_prices.isnull().sum(),
-                                'remaining nan close price': close_prices.isnull().sum(),
-                                'remaining nan volumes': volumes.isnull().sum()}))
+            if sum([x.isnull().sum() for x in [prices, open_prices, close_prices, volumes]]) != 0:
+                print(pd.DataFrame({'remaining nan price': prices.isnull().sum(),
+                                    'remaining nan open price': open_prices.isnull().sum(),
+                                    'remaining nan close price': close_prices.isnull().sum(),
+                                    'remaining nan volumes': volumes.isnull().sum()}))
+                print('Proceeding with forward fills to remove remaining NaNs')
 
             # ### Calculate sigmas
             sigmas = np.abs(np.log(open_prices.astype(float)) - np.log(close_prices.astype(float)))
@@ -431,11 +433,15 @@ class Model(metaclass=ABCMeta):
             close_prices = close_prices.iloc[1:]
             sigmas = sigmas.iloc[1:]
             volumes = volumes.iloc[1:]
-            print(pd.DataFrame({'remaining nan price': prices.isnull().sum(),
-                                'remaining nan open price': open_prices.isnull().sum(),
-                                'remaining nan close price': close_prices.isnull().sum(),
-                                'remaining nan volumes': volumes.isnull().sum(),
-                                'remaining nan sigmas': sigmas.isnull().sum()}))
+
+            # At this point there should be no NaNs remaining
+            if sum([x.isnull().sum() for x in [prices, open_prices, close_prices, volumes, sigmas]]) != 0:
+                print(pd.DataFrame({'remaining nan price': prices.isnull().sum(),
+                                    'remaining nan open price': open_prices.isnull().sum(),
+                                    'remaining nan close price': close_prices.isnull().sum(),
+                                    'remaining nan volumes': volumes.isnull().sum(),
+                                    'remaining nan sigmas': sigmas.isnull().sum()}))
+                raise ValueError('Model.__validate_and_sync_return_data: >0 NaNs, investigation required')
 
             # #### Compute returns
             returns = (prices.diff() / prices.shift(1)).fillna(method='ffill').iloc[1:]
