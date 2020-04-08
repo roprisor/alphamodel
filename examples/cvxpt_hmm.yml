@@ -7,7 +7,6 @@ alpha:
       - EWG
       - EWH
       - EWA
-    ticker_col: Symbol
     risk_free_symbol: USDOLLAR
   drop_threshold: 0.5
   data:

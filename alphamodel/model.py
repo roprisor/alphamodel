@@ -48,10 +48,14 @@ class Model(metaclass=ABCMeta):
                 self._universe = cfg['universe']['list']
             elif 'path' in cfg['universe']:
                 self._universe = pd.read_csv(cfg['universe']['path'])[cfg['universe']['ticker_col']].to_list()
+
+            # Add risk_free_symbol
             if cfg['universe']['risk_free_symbol']:
                 self.risk_free_symbol = cfg['universe']['risk_free_symbol']
             else:
                 self.risk_free_symbol = 'USDOLLAR'
+
+            # risk_free_symbol should be part of _universe in order to be fetched but should not be accessible otherwise
             if self.risk_free_symbol not in self._universe:
                 self._universe.append(self.risk_free_symbol)
         except ValueError:
@@ -304,7 +308,7 @@ class Model(metaclass=ABCMeta):
 
         # extract prices
         prices = pd.DataFrame.from_dict(
-            dict(zip(keys, [select_first_valid_column(raw_data[k], ["Adj. Close", "Close", "Value"])
+            dict(zip(keys, [select_first_valid_column(raw_data[k], ["Adj_Close", "Close", "Value"])
                             for k in keys])))
 
         # compute sigmas
@@ -315,7 +319,7 @@ class Model(metaclass=ABCMeta):
 
         # extract volumes
         volumes = pd.DataFrame.from_dict(dict(zip(keys, [select_first_valid_column(raw_data[k],
-                                                                                   ["Adj. Volume", "Volume"])
+                                                                                   ["Adj_Volume", "Volume"])
                                                          for k in keys])))
 
         # fix risk free
@@ -351,7 +355,7 @@ class Model(metaclass=ABCMeta):
 
             # Fix dates on which many assets have missing values
             nassets = prices.shape[1]
-            bad_dates_p = prices.index[prices.isnull().sum(1) > nassets * .9]
+            bad_dates_p = prices.index[prices.isnull().sum(1) >= nassets * .9]
             bad_dates_o = open_prices.index[open_prices.isnull().sum(1) > nassets * .9]
             bad_dates_c = close_prices.index[close_prices.isnull().sum(1) > nassets * .9]
             bad_dates_v = volumes.index[volumes.isnull().sum(1) > nassets * .9]
@@ -410,6 +414,10 @@ class Model(metaclass=ABCMeta):
             # ### Calculate sigmas
             sigmas = np.abs(np.log(open_prices.astype(float)) - np.log(close_prices.astype(float)))
 
+            # #### Calculate volumes
+            # Make volumes in dollars
+            volumes = volumes * prices
+
             # Forward fill any gaps
             prices = prices.fillna(method='ffill')
             open_prices = open_prices.fillna(method='ffill')
@@ -429,11 +437,7 @@ class Model(metaclass=ABCMeta):
                                 'remaining nan volumes': volumes.isnull().sum(),
                                 'remaining nan sigmas': sigmas.isnull().sum()}))
 
-            # #### Calculate volumes & returns
-            # Make volumes in dollars
-            volumes = volumes * prices
-
-            # Compute returns
+            # #### Compute returns
             returns = (prices.diff() / prices.shift(1)).fillna(method='ffill').iloc[1:]
 
             # Remove USDOLLAR except from returns
