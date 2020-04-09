@@ -355,10 +355,10 @@ class Model(metaclass=ABCMeta):
 
             # Fix dates on which many assets have missing values
             nassets = prices.shape[1]
-            bad_dates_p = prices.index[prices.isnull().sum(1) >= nassets * .9]
-            bad_dates_o = open_prices.index[open_prices.isnull().sum(1) > nassets * .9]
-            bad_dates_c = close_prices.index[close_prices.isnull().sum(1) > nassets * .9]
-            bad_dates_v = volumes.index[volumes.isnull().sum(1) > nassets * .9]
+            bad_dates_p = prices.index[prices.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
+            bad_dates_o = open_prices.index[open_prices.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
+            bad_dates_c = close_prices.index[close_prices.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
+            bad_dates_v = volumes.index[volumes.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
             bad_dates = set(bad_dates_p).union(set(bad_dates_o)).union(set(bad_dates_c)).union(set(bad_dates_v))
 
             # Maintain list of removed dates across all data fetches
