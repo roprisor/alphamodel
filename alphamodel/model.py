@@ -9,7 +9,7 @@ import pickle
 import yaml
 
 from abc import ABCMeta, abstractmethod
-from data_set import TimeSeriesDataSet
+from .data_set import TimeSeriesDataSet
 from datetime import datetime
 from enum import Enum
 from os import path
