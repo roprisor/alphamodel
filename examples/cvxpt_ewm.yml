@@ -14,12 +14,11 @@ alpha:
     start_date: '20100102'
     end_date: '20171231'
     data_dir: '../data/'
-    alpha: 1
-    lambda: 0.8
+    halflife: 4
     horizon: 1
-    min_periods: 10
+    min_periods: 4
     returns:
-      sampling_freq: monthly
+      sampling_freq: weekly
     covariance:
       method: FF5
       sampling_freq: daily

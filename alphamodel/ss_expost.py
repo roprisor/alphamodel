@@ -82,7 +82,7 @@ class SingleStockExPost(Model):
 
 
 if __name__ == '__main__':
-    ss_ep_model = SingleStockExPost('../examples/cvxpt_rebalance.yml')
+    ss_ep_model = SingleStockExPost('../examples/cvxpt_ewm.yml')
     ss_ep_model.train(False)
     ss_ep_model.predict()
     ss_ep_model.prediction_quality()

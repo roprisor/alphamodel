@@ -4,6 +4,7 @@ Single stock returns - exponentially weighted moving average model
 
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 from .model import Model, SamplingFrequency
 from sklearn import linear_model
@@ -26,12 +27,12 @@ class SingleStockEWM(Model):
         :return: n/a (all data stored in self.predicted)
         """
         # Input validation
-        if 'alpha' not in self.cfg or 'min_periods' not in self.cfg:
-            raise ValueError('SingleStockEWM: Model config requires both min_periods (periods backwards) and an '
-                             'alpha value (decay of historical values, 0 to 1) to run.')
+        if 'halflife' not in self.cfg or 'min_periods' not in self.cfg:
+            raise ValueError('SingleStockEWM: Model config requires both min_periods (periods backwards) and a '
+                             'halflife (decay of historical values, periods to half original value) to run.')
 
         # ## Load up model configs
-        alpha = self.cfg['alpha']
+        halflife = self.cfg['halflife']
         min_periods = self.cfg['min_periods']
 
         # ## Estimates
@@ -41,11 +42,11 @@ class SingleStockEWM(Model):
         realized_sigmas = self.get('sigmas', data_type='realized', sampling_freq=self.cfg['returns']['sampling_freq'])
         print("Typical variance of returns: %g" % realized_returns.var().mean())
 
-        self.set('returns', realized_returns.ewm(alpha=alpha, min_periods=min_periods).mean().shift(1).dropna(),
+        self.set('returns', realized_returns.ewm(halflife=halflife, min_periods=min_periods).mean().shift(1).dropna(),
                  'predicted')
 
         # Volumes & sigmas
-        self.set('volumes', realized_volumes.ewm(alpha=alpha, min_periods=min_periods).mean().shift(1).dropna(),
+        self.set('volumes', realized_volumes.ewm(halflife=halflife, min_periods=min_periods).mean().shift(1).dropna(),
                  'predicted')
         self.set('sigmas', realized_sigmas.shift(1).dropna(), 'predicted')
 
@@ -53,7 +54,7 @@ class SingleStockEWM(Model):
         if 'covariance' not in self.cfg:
             raise NotImplemented('Covariance section needs to be defined under SS EWM model config.')
         elif self.cfg['covariance']['method'] == 'SS':
-            self.set('covariance', realized_returns.ewm(alpha=alpha, min_periods=min_periods).cov().
+            self.set('covariance', realized_returns.ewm(halflife=halflife, min_periods=min_periods).cov().
                      shift(realized_returns.shape[1]).dropna(), 'predicted', self.cfg['covariance']['sampling_freq'])
         elif self.cfg['covariance']['method'] == 'FF5':
             # Fetch data
@@ -126,22 +127,75 @@ class SingleStockEWM(Model):
     def predict_next(self):
         pass
 
-    def prediction_quality(self, statistic='correlation'):
+    @staticmethod
+    def win_rate_symbol_horizon(returns_pred, returns_real, symbol, horizon):
+        """
+        Compute % of alpha values in the correct direction - 1 symbol, 1 horizon
+        """
+        # Return estimate at horizon
+        if horizon > 1:
+            returns = returns_pred[[symbol]].merge(returns_real[[symbol]].rolling(horizon).mean().shift(-horizon + 1),
+                                                   suffixes=('_pred', '_real'),
+                                                   left_index=True, right_index=True)
+        else:
+            returns = returns_pred[[symbol]].merge(returns_real[[symbol]],
+                                                   suffixes=('_pred', '_real'),
+                                                   left_index=True, right_index=True)
+
+        # Comparison value
+        return np.sum(np.sign(returns.loc[:, symbol + '_pred']) == np.sign(returns.loc[:, symbol + '_real'])) \
+               / returns.shape[0]
+
+    @staticmethod
+    def win_rate(returns_pred, returns_real, symbol=None, horizon=None):
+        """
+        Compute % of alpha values in the correct direction - sample horizons, all symbols
+        """
+        # Input processing
+        if not horizon:
+            horizons = [1, 3, 5, 10, 20, 40, 60, 90, 120]
+        elif type(symbol) == str:
+            return SingleStockEWM.win_rate_symbol_horizon(returns_pred, returns_real, symbol, horizon)
+        else:
+            horizons = [horizon]
+
+        # Data frame skeleton
+        win_rate_all = pd.DataFrame(index=horizons)
+
+        # Compute win rate for each symbol
+        for symbol in returns_pred.columns:
+            win_rate = []
+            for horizon in horizons:
+                win_rate.append(SingleStockEWM.win_rate_symbol_horizon(returns_pred, returns_real, symbol, horizon))
+            win_rate_all[symbol] = win_rate
+
+        # Compute statistics across all symbols
+        win_rate_all = win_rate_all.agg(['mean', 'std'], axis=1).merge(win_rate_all, left_index=True, right_index=True)
+
+        # Formatting
+        cm = sns.light_palette("green", as_cmap=True)
+        return win_rate_all.style.background_gradient(cmap=cm).format("{:.1%}")
+
+    def prediction_quality(self, statistic='win_rate', **kwargs):
         """
         Compute prediction quality
         :param statistic:
         :return:
         """
-        agree_on_sign = np.sign(self.realized['returns'].iloc[:, :-1]) == \
-                        np.sign(self.predicted['returns'].iloc[:, :-1])
-        print("Return predictions have the right sign %.1f%% of the times" %
-              (100 * agree_on_sign.sum().sum() / (agree_on_sign.shape[0] * (agree_on_sign.shape[1] - 1))))
+        if statistic == 'win_rate':
+            realized_returns = self.get('returns', data_type='realized',
+                                        sampling_freq=self.cfg['returns']['sampling_freq'])
+            predicted_returns = self.get('returns', data_type='predicted',
+                                         sampling_freq=self.cfg['returns']['sampling_freq'])
+
+            return SingleStockEWM.win_rate(predicted_returns, realized_returns, **kwargs)
 
     def show_results(self):
         pass
 
 
 if __name__ == '__main__':
-    ss_ewm_model = SingleStockEWM('../examples/cvxpt_rebalance.yml')
+    ss_ewm_model = SingleStockEWM('../examples/cvxpt_ewm.yml')
     ss_ewm_model.train()
     ss_ewm_model.predict()
+    ss_ewm_model.prediction_quality()

@@ -180,9 +180,11 @@ if __name__ == '__main__':
     import yaml
     from datetime import datetime
 
-    with open('/Users/razvan/PyRepo/alphamodel/examples/cvxpt_rebalance.yml') as cfg_file:
+    with open('/alphamodel/examples/cvxpt_ewm.yml') as cfg_file:
         yml_cfg = yaml.load(cfg_file, yaml.SafeLoader)
         ds = TimeSeriesDataSet.init(yml_cfg['alpha'])
 
     spy_data = ds.get('SPY', datetime(2017, 1, 1), datetime(2018, 12, 31), ['Adj_Close', 'Adj_Volume'], 'monthly')
+    fred_data = ds.get('USDOLLAR', datetime(1997, 1, 1), datetime(2019, 12, 31), None, 'daily')
     print(spy_data.tail())
+    print(fred_data.tail())
