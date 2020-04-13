@@ -28,13 +28,13 @@ class SingleStockHMM(Model):
         :return: n/a (all data stored in self.predicted)
         """
         # Input validation
-        if 'train_len' not in self.cfg or 'hidden_states' not in self.cfg or 'alpha' not in self.cfg:
+        if 'train_len' not in self.cfg or 'hidden_states' not in self.cfg or 'halflife' not in self.cfg:
             raise ValueError('SingleStockHMM: Model config requires:\n - train_len (periods of dataset to train on)\n'
                              '- hidden_states (how many states should be fit in the model)\n'
-                             '- alpha (EWM decay for time series)')
+                             '- halflife (decay of historical values, periods to half original value)')
 
         # ## Load up model configs
-        alpha = self.cfg['alpha']
+        halflife = self.cfg['halflife']
         train_len = self.cfg['train_len']
         hidden_states = self.cfg['hidden_states']
 
@@ -117,14 +117,14 @@ class SingleStockHMM(Model):
         self.set('returns', returns_pred, 'predicted')
 
         # ## Estimates - Volumes and Sigmas
-        self.set('volumes', realized_volumes.ewm(alpha=alpha, min_periods=10).mean().shift(1).dropna(), 'predicted')
+        self.set('volumes', realized_volumes.ewm(halflife=halflife, min_periods=10).mean().shift(1).dropna(), 'predicted')
         self.set('sigmas', realized_sigmas.shift(1).dropna(), 'predicted')
 
         # ## Estimates - Covariance
         if 'covariance' not in self.cfg:
             raise NotImplemented('Covariance section needs to be defined under SS EWM model config.')
         elif self.cfg['covariance']['method'] == 'SS':
-            self.set('covariance', realized_returns.ewm(alpha=alpha, min_periods=10).cov().
+            self.set('covariance', realized_returns.ewm(halflife=halflife, min_periods=10).cov().
                      shift(realized_returns.shape[1]).dropna(), 'predicted', self.cfg['covariance']['sampling_freq'])
         elif self.cfg['covariance']['method'] == 'FF5':
             # Fetch data
