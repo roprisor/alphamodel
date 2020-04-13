@@ -115,6 +115,7 @@ class SingleStockHMM(Model):
             test_idx = start_idx_test
 
         self.set('returns', returns_pred, 'predicted')
+        self.set('confidence', confidence_pred, 'predicted')
 
         # ## Estimates - Volumes and Sigmas
         self.set('volumes', realized_volumes.ewm(halflife=halflife, min_periods=10).mean().shift(1).dropna(), 'predicted')
