@@ -59,8 +59,8 @@ class SingleStockHMM(Model):
         test_idx = start_idx_test
 
         # For each asset
-        while symbol_idx < len(self.universe):
-            print('Running for ticker: {s}'.format(s=self.universe[symbol_idx]))
+        while symbol_idx < len(self._universe):
+            print('Running for ticker: {s}'.format(s=self._universe[symbol_idx]))
 
             sym_return_pred = []
             sym_confidence_pred = []
@@ -102,12 +102,12 @@ class SingleStockHMM(Model):
                 test_idx += 1
 
             # Store prediction results for this symbol
-            print('\n{sym} return pred length: {len}'.format(sym=self.universe[symbol_idx],
+            print('\n{sym} return pred length: {len}'.format(sym=self._universe[symbol_idx],
                                                              len=len(sym_return_pred)))
-            print('\n{sym} return real length: {len}'.format(sym=self.universe[symbol_idx],
+            print('\n{sym} return real length: {len}'.format(sym=self._universe[symbol_idx],
                                                              len=returns_pred.index.shape[0]))
-            returns_pred[self.universe[symbol_idx]] = sym_return_pred
-            confidence_pred[self.universe[symbol_idx]] = sym_confidence_pred
+            returns_pred[self._universe[symbol_idx]] = sym_return_pred
+            confidence_pred[self._universe[symbol_idx]] = sym_confidence_pred
 
             # Loop or no loop?
             # break
@@ -118,7 +118,8 @@ class SingleStockHMM(Model):
         self.set('confidence', confidence_pred, 'predicted')
 
         # ## Estimates - Volumes and Sigmas
-        self.set('volumes', realized_volumes.ewm(halflife=halflife, min_periods=10).mean().shift(1).dropna(), 'predicted')
+        self.set('volumes', realized_volumes.ewm(halflife=halflife, min_periods=10).mean().shift(1).dropna(),
+                 'predicted')
         self.set('sigmas', realized_sigmas.shift(1).dropna(), 'predicted')
 
         # ## Estimates - Covariance
