@@ -21,7 +21,7 @@ class SingleStockHMM(Model):
         Training function for model
         :return:
         """
-        return self._fetch_base_data(force) and super(self).train(**kwargs)
+        return self._fetch_base_data(force) and super().train(**kwargs)
 
     def predict(self, **kwargs):
         """
@@ -202,7 +202,7 @@ class SingleStockHMM(Model):
                                  ' - SS (single stock returns)\n'
                                  '- FF5 (Fama French 5 factor returns).')
 
-        return super(self).predict(**kwargs)
+        return super().predict(**kwargs)
 
     def predict_next(self):
         pass
@@ -226,7 +226,7 @@ class SingleStockHMM(Model):
         # TODO: How should the data frames look, horizon on index?
         for symbol in self._universe:
             hmm_model = hmm_sym[symbol]
-            
+
 
         #
 
