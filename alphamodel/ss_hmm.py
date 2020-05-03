@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from .model import Model, SamplingFrequency
+from .model import Model, ModelState, SamplingFrequency
+from .scenario import Scenario
 from sklearn import linear_model
 from hmmlearn import hmm
 
@@ -15,14 +16,14 @@ __all__ = ['SingleStockHMM']
 
 class SingleStockHMM(Model):
 
-    def train(self, force=False):
+    def train(self, force=False, **kwargs):
         """
         Training function for model
         :return:
         """
-        return self._fetch_base_data(force)
+        return self._fetch_base_data(force) and super(self).train(**kwargs)
 
-    def predict(self):
+    def predict(self, **kwargs):
         """
         Prediction function for model, for out of sample historical test set
         :return: n/a (all data stored in self.predicted)
@@ -54,6 +55,7 @@ class SingleStockHMM(Model):
 
         returns_pred = pd.DataFrame(index=test_set.index)
         confidence_pred = pd.DataFrame(index=test_set.index)
+        hmm_storage = {}
 
         symbol_idx = 0
         test_idx = start_idx_test
@@ -81,6 +83,7 @@ class SingleStockHMM(Model):
                 regime_model.fit(train_set_hmm)
                 state_proba = regime_model.predict_proba(train_set_hmm)
                 regime = regime_model.predict(train_set_hmm)
+                hmm_storage[realized_returns.index[test_idx]][self._universe[symbol_idx]] = regime_model
 
                 # Predict next returns, covariances & add to prediction list
                 sym_return_pred.append(float(regime_model.means_.T.dot(state_proba[-1])))  # expected mean
@@ -116,6 +119,7 @@ class SingleStockHMM(Model):
 
         self.set('returns', returns_pred, 'predicted')
         self.set('confidence', confidence_pred, 'predicted')
+        self.set('hmm_storage', hmm_storage, 'predicted')
 
         # ## Estimates - Volumes and Sigmas
         self.set('volumes', realized_volumes.ewm(halflife=halflife, min_periods=10).mean().shift(1).dropna(),
@@ -178,6 +182,7 @@ class SingleStockHMM(Model):
                 factor_sigma[day] = used_ff_returns.cov().fillna(0)
                 # Exposures - factor loadings obtained from multi linear regression coefficients of stock on FF factors
                 exposures[day] = pd.DataFrame(data=mlr.coef_, index=realized_returns.columns).fillna(0)
+                # TODO use HMM predicted stock var
                 # Stock idiosyncratic variances - stock var minus FF var, ensure >=0
                 idyos[day] = pd.Series(np.diag(used_returns.cov().values -
                                                exposures[day].values @ factor_sigma[day].values @ exposures[
@@ -193,12 +198,45 @@ class SingleStockHMM(Model):
                                                            'train_days': days_back}), 'predicted')
 
         else:
-            raise NotImplemented('Covariance section needs to be defined under ss_hmm moodel config and needs either:\n'
+            raise NotImplemented('Covariance section needs to be defined under ss_hmm model config and needs either:\n'
                                  ' - SS (single stock returns)\n'
                                  '- FF5 (Fama French 5 factor returns).')
 
+        return super(self).predict(**kwargs)
+
     def predict_next(self):
         pass
+
+    def generate_forward_scenario(self, dt, horizon):
+        """
+        Generate forward scenario
+        :param dt: datetime to start at
+        :param horizon: periods ahead to be included in the scenario
+        :return:
+        """
+        if self.state != ModelState.PREDICTED:
+            raise ValueError('generate_forward_scenario: Unable to run if model hasn''t been used to predict yet.')
+
+        # 1. Generate return samples for horizon
+        # Grab HMM models being stored for dt
+        hmm_storage = self.get('hmm_storage', 'predicted')
+        hmm_sym = hmm_storage[dt]
+        returns = pd.DataFrame()
+
+        # TODO: How should the data frames look, horizon on index?
+        for symbol in self._universe:
+            hmm_model = hmm_sym[symbol]
+            
+
+        #
+
+        # 2. Generate volume samples for horizon
+
+
+        # 3. Generate sigma samples for horizon
+
+
+        return #Scenario(returns, volumes, sigmas)
 
     @staticmethod
     def win_rate_symbol_horizon(returns_pred, returns_real, symbol, horizon):
@@ -217,7 +255,7 @@ class SingleStockHMM(Model):
 
         # Comparison value
         return np.sum(np.sign(returns.loc[:, symbol + '_pred']) == np.sign(returns.loc[:, symbol + '_real'])) \
-               / returns.shape[0]
+            / returns.shape[0]
 
     @staticmethod
     def win_rate(returns_pred, returns_real, symbol=None, horizon=None):

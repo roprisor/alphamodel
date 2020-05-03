@@ -1,4 +1,5 @@
 from .data_set import QuandlTimeSeriesDataSet
+from .scenario import Scenario
 from .ss_ewm import SingleStockEWM
 from .ss_expost import SingleStockExPost
 from .ss_hmm import SingleStockHMM

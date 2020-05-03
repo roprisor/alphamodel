@@ -14,7 +14,7 @@ from datetime import datetime
 from enum import Enum
 from os import path
 
-__all__ = ['Model', 'SamplingFrequency']
+__all__ = ['Model', 'ModelState', 'SamplingFrequency']
 
 
 class SamplingFrequency(Enum):
@@ -22,6 +22,12 @@ class SamplingFrequency(Enum):
     WEEK = 'weekly'
     MONTH = 'monthly'
     QUARTER = 'quarterly'
+
+
+class ModelState(Enum):
+    INITIALIZED = 0
+    TRAINED = 0
+    PREDICTED = 0
 
 
 class Model(metaclass=ABCMeta):
@@ -71,6 +77,15 @@ class Model(metaclass=ABCMeta):
             self.__predicted[freq] = {}
         self.__removed_assets = set()
         self.__removed_dates = set()
+        self.__state = ModelState.INITIALIZED
+
+    @property
+    def state(self):
+        """
+        Retrieve model state
+        :return: ModelState Enum
+        """
+        return self.__state
 
     @property
     def universe(self):
@@ -235,7 +250,7 @@ class Model(metaclass=ABCMeta):
         :param kwargs:
         :return: n/a
         """
-        pass
+        self.__state = ModelState.TRAINED
 
     def _fetch_base_data(self, force=False):
         """
@@ -482,7 +497,7 @@ class Model(metaclass=ABCMeta):
         :param kwargs:
         :return:
         """
-        pass
+        self.__state = ModelState.PREDICTED
 
     @abstractmethod
     def prediction_quality(self, statistic=None):
