@@ -21,7 +21,11 @@ class SingleStockHMM(Model):
         Training function for model
         :return:
         """
-        return self._fetch_base_data(force) and super().train(**kwargs)
+        success = self._fetch_base_data(force)
+        if success:
+            self.__state = ModelState.TRAINED
+
+        return success
 
     def predict(self, **kwargs):
         """
@@ -69,9 +73,6 @@ class SingleStockHMM(Model):
 
             # For each test date in the test_set
             while test_idx < end_idx_test:
-                # Current iteration
-                # print("Running for index: " + str(test_idx))
-
                 # Grab train_set
                 # Which one is better?
                 train_set_idx = realized_returns.iloc[(test_idx - train_len):test_idx, symbol_idx]
@@ -83,7 +84,6 @@ class SingleStockHMM(Model):
                 regime_model.fit(train_set_hmm)
                 state_proba = regime_model.predict_proba(train_set_hmm)
                 regime = regime_model.predict(train_set_hmm)
-                hmm_storage[realized_returns.index[test_idx]][self._universe[symbol_idx]] = regime_model
 
                 # Predict next returns, covariances & add to prediction list
                 sym_return_pred.append(float(regime_model.means_.T.dot(state_proba[-1])))  # expected mean
@@ -96,8 +96,13 @@ class SingleStockHMM(Model):
                 # else:
                 #    sym_return_pred.append(0)
 
-                # Use confidence as input into Black Litterman
+                # Compute confidence for input into Black Litterman
                 sym_confidence_pred.append(sum(state_proba[-1] ** 4))
+
+                # Store model for later use
+                if realized_returns.index[test_idx] not in hmm_storage:
+                    hmm_storage[realized_returns.index[test_idx]] = {}
+                hmm_storage[realized_returns.index[test_idx]][self._universe[symbol_idx]] = regime_model
 
                 # Loop or no loop?
                 # Break here to show results if requested to do so at a particular index
@@ -202,7 +207,8 @@ class SingleStockHMM(Model):
                                  ' - SS (single stock returns)\n'
                                  '- FF5 (Fama French 5 factor returns).')
 
-        return super().predict(**kwargs)
+        self.__state = ModelState.PREDICTED
+        return True
 
     def predict_next(self):
         pass
