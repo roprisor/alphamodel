@@ -144,11 +144,12 @@ class SingleStockHMM(Model):
             symbol_idx += 1
             test_idx = start_idx_test
 
+        self.set('returns', returns_pred, 'predicted')
         self.set('returns_hmm', returns_pred, 'predicted')
         self.set('sigmas_hmm', sigmas_pred, 'predicted')
         self.set('state0_prob', state0_pred, 'predicted')
         self.set('confidence', confidence_pred, 'predicted')
-        self.set('hmm_storage', hmm_storage, 'predicted')
+        self.set('models_hmm', hmm_storage, 'predicted')
 
         # ## Estimates - Volumes and Sigmas
         self.set('volumes', realized_volumes.ewm(halflife=halflife, min_periods=10).mean().shift(1).dropna(),
@@ -237,7 +238,7 @@ class SingleStockHMM(Model):
     def predict_next(self):
         pass
 
-    def generate_forward_scenario(self, dt, horizon, mode='eg'):
+    def generate_forward_scenario(self, dt, horizon, mode='eg', threshold=0.8):
         """
         Generate forward scenario
         :param dt: datetime to start at
@@ -246,6 +247,7 @@ class SingleStockHMM(Model):
                         lg = likely Gaussian (highest likelihood return & sigma)
                         er = expected return (constant)
                         hmm = HMM (fit parameters to historical training data)
+        :param threshold: likelihood threshold for 'lg' mode to pick 1 state
         :return:
         """
         if self.state != ModelState.PREDICTED:
@@ -256,8 +258,8 @@ class SingleStockHMM(Model):
         sigmas_pred = self.get('sigmas', 'predicted')
         returns_hmm = self.get('returns_hmm', 'predicted')
         sigmas_hmm = self.get('sigmas_hmm', 'predicted')
-        state0_hmm = self.get('state0_pred', 'predicted')
-        hmm_dt = self.get('hmm_storage', 'predicted')[dt]
+        state0_hmm = self.get('state0_prob', 'predicted')
+        hmm_dt = self.get('models_hmm', 'predicted')[dt]
 
         # Generate indices (dates)
         dt_index = volumes_pred.index.get_loc(dt)
@@ -276,6 +278,7 @@ class SingleStockHMM(Model):
             if mode == 'hmm':
                 # HMM model generated samples
                 returns.loc[:, symbol], _ = hmm_dt[symbol].sample(horizon)
+
             elif mode == 'eg':
                 # Gaussian generated samples (expected return & sigmas)
                 # Expected return & sigma
@@ -286,9 +289,29 @@ class SingleStockHMM(Model):
                 rng = np.random.default_rng()
                 samples = rng.normal(sym_return, sym_sigma, horizon)
                 returns.loc[:, symbol] = samples
+
             elif mode == 'lg':
                 # Gaussian generated samples (most likely Gaussian distribution)
-                pass
+                # Extract likelihood of state 0
+                sym_state0_prob = state0_hmm.loc[dt, symbol]
+                hmm_model = hmm_dt[symbol]
+
+                # Choose return/sigma based on state likelihood
+                if sym_state0_prob >= threshold:
+                    sym_return = hmm_model.means_[0]
+                    sym_sigma = hmm_model.covars_[0][0]
+                elif sym_state0_prob <= (1 - threshold):
+                    sym_return = hmm_model.means_[1]
+                    sym_sigma = hmm_model.covars_[1][0]
+                else:
+                    sym_return = returns_hmm.loc[dt, symbol]
+                    sym_sigma = sigmas_hmm.loc[dt, symbol]
+
+                # Generate a Gaussian distribution of horizon length
+                rng = np.random.default_rng()
+                samples = rng.normal(sym_return, sym_sigma, horizon)
+                returns.loc[:, symbol] = samples
+
             elif mode == 'er':
                 # Constant expected return
                 sym_return = returns_hmm.loc[dt, symbol]
