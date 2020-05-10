@@ -10,7 +10,9 @@ class Scenario:
     """
     Scenario needs per stock: returns, volumes, sigmas
     """
-    def __init__(self, returns, volumes, sigmas):
+    def __init__(self, dt, horizon, returns, volumes, sigmas):
+        self.dt = dt
+        self.horizon = horizon
         self.returns = returns
         self.volumes = volumes
         self.sigmas = sigmas

@@ -8,6 +8,7 @@ import seaborn as sns
 
 from .model import Model, ModelState, SamplingFrequency
 from .scenario import Scenario
+from datetime import timedelta
 from sklearn import linear_model
 from hmmlearn import hmm
 
@@ -27,9 +28,13 @@ class SingleStockHMM(Model):
 
         return success
 
-    def predict(self, **kwargs):
+    def predict(self, mode='e', threshold=0.8, **kwargs):
         """
         Prediction function for model, for out of sample historical test set
+        :param mode:    e = expected return & sigma (probability weighted)
+                        t = state with probability over threshold return & sigma
+        :param threshold: probability threshold for state to be fully selected
+
         :return: n/a (all data stored in self.predicted)
         """
         # Input validation
@@ -58,6 +63,8 @@ class SingleStockHMM(Model):
         test_set = realized_returns.iloc[start_idx_test:end_idx_test]
 
         returns_pred = pd.DataFrame(index=test_set.index)
+        sigmas_pred = pd.DataFrame(index=test_set.index)
+        state0_pred = pd.DataFrame(index=test_set.index)
         confidence_pred = pd.DataFrame(index=test_set.index)
         hmm_storage = {}
 
@@ -69,6 +76,8 @@ class SingleStockHMM(Model):
             print('Running for ticker: {s}'.format(s=self._universe[symbol_idx]))
 
             sym_return_pred = []
+            sym_sigma_pred = []
+            sym_state0_pred = []
             sym_confidence_pred = []
 
             # For each test date in the test_set
@@ -80,24 +89,35 @@ class SingleStockHMM(Model):
 
                 # Fit the returns to an HMM model
                 train_set_hmm = train_set_idx.values.reshape(-1, 1)
-                regime_model = hmm.GaussianHMM(n_components=hidden_states, n_iter=200)
+                regime_model = hmm.GaussianHMM(n_components=hidden_states, n_iter=200, tol=0.01)
                 regime_model.fit(train_set_hmm)
-                state_proba = regime_model.predict_proba(train_set_hmm)
-                regime = regime_model.predict(train_set_hmm)
+                logprob, state_proba = regime_model.score_samples(train_set_hmm)
+                # regime = regime_model.predict(train_set_hmm)
 
                 # Predict next returns, covariances & add to prediction list
-                sym_return_pred.append(float(regime_model.means_.T.dot(state_proba[-1])))  # expected mean
-
-                # Check here how frequent to switch state - toggle regimes
-                # if state_proba[-1][0] > 0.7:
-                #    sym_return_pred.append(float(regime_model.means_[0]))
-                # elif state_proba[-1][0] > 0.7:
-                #    sym_return_pred.append(float(regime_model.means_[1]))
-                # else:
-                #    sym_return_pred.append(0)
+                if mode == 'e':
+                    # Expected return & sigma
+                    sym_return_pred.append(float(regime_model.means_.T.dot(state_proba[-1])))  # proba weighted mean
+                    sym_sigma_pred.append(float(regime_model.covars_.T.dot(state_proba[-1])))  # proba weighted sigma
+                elif mode == 't':
+                    # State return & sigma - if state passes threshold hurdle
+                    if state_proba[-1][0] > threshold:
+                        sym_return_pred.append(float(regime_model.means_[0]))
+                        sym_sigma_pred.append(float(regime_model.covars_[0][0]))
+                    elif state_proba[-1][1] > threshold:
+                        sym_return_pred.append(float(regime_model.means_[1]))
+                        sym_sigma_pred.append(float(regime_model.covars_[1][0]))
+                    else:
+                        sym_return_pred.append(float(regime_model.means_.T.dot(state_proba[-1])))  # proba weighted mean
+                        sym_sigma_pred.append(
+                            float(regime_model.covars_.T.dot(state_proba[-1])))  # proba weighted sigma
+                else:
+                    raise ValueError('mode: {} not supported, please check function def for allowed values'.
+                                     format(mode))
 
                 # Compute confidence for input into Black Litterman
                 sym_confidence_pred.append(sum(state_proba[-1] ** 4))
+                sym_state0_pred.append(state_proba[-1][0])
 
                 # Store model for later use
                 if realized_returns.index[test_idx] not in hmm_storage:
@@ -115,6 +135,8 @@ class SingleStockHMM(Model):
             print('\n{sym} return real length: {len}'.format(sym=self._universe[symbol_idx],
                                                              len=returns_pred.index.shape[0]))
             returns_pred[self._universe[symbol_idx]] = sym_return_pred
+            sigmas_pred[self._universe[symbol_idx]] = sym_sigma_pred
+            state0_pred[self._universe[symbol_idx]] = sym_state0_pred
             confidence_pred[self._universe[symbol_idx]] = sym_confidence_pred
 
             # Loop or no loop?
@@ -122,7 +144,9 @@ class SingleStockHMM(Model):
             symbol_idx += 1
             test_idx = start_idx_test
 
-        self.set('returns', returns_pred, 'predicted')
+        self.set('returns_hmm', returns_pred, 'predicted')
+        self.set('sigmas_hmm', sigmas_pred, 'predicted')
+        self.set('state0_prob', state0_pred, 'predicted')
         self.set('confidence', confidence_pred, 'predicted')
         self.set('hmm_storage', hmm_storage, 'predicted')
 
@@ -213,36 +237,77 @@ class SingleStockHMM(Model):
     def predict_next(self):
         pass
 
-    def generate_forward_scenario(self, dt, horizon):
+    def generate_forward_scenario(self, dt, horizon, mode='eg'):
         """
         Generate forward scenario
         :param dt: datetime to start at
         :param horizon: periods ahead to be included in the scenario
+        :param mode:    eg = expected Gaussian (Gaussian of expected return & sigma)
+                        lg = likely Gaussian (highest likelihood return & sigma)
+                        er = expected return (constant)
+                        hmm = HMM (fit parameters to historical training data)
         :return:
         """
         if self.state != ModelState.PREDICTED:
-            raise ValueError('generate_forward_scenario: Unable to run if model hasn''t been used to predict yet.')
+            raise ValueError('generate_forward_scenario: Unable to run if model is not in predicted state.')
 
-        # 1. Generate return samples for horizon
-        # Grab HMM models being stored for dt
-        hmm_storage = self.get('hmm_storage', 'predicted')
-        hmm_sym = hmm_storage[dt]
-        returns = pd.DataFrame()
+        # Grab needed inputs
+        volumes_pred = self.get('volumes', 'predicted')
+        sigmas_pred = self.get('sigmas', 'predicted')
+        returns_hmm = self.get('returns_hmm', 'predicted')
+        sigmas_hmm = self.get('sigmas_hmm', 'predicted')
+        state0_hmm = self.get('state0_pred', 'predicted')
+        hmm_dt = self.get('hmm_storage', 'predicted')[dt]
 
-        # TODO: How should the data frames look, horizon on index?
+        # Generate indices (dates)
+        dt_index = volumes_pred.index.get_loc(dt)
+        avail_dates = volumes_pred.shape[0] - dt_index
+        if avail_dates >= horizon:
+            indices = volumes_pred.index[dt_index:(dt_index + horizon)]
+        else:
+            real_dates = volumes_pred.index[dt_index:(dt_index + avail_dates)]
+            potential_dates = pd.date_range(start=real_dates[-1],
+                                            end=real_dates[-1] + timedelta(days=horizon - avail_dates))
+            indices = real_dates.union(potential_dates)
+
+        # Generate returns
+        returns = pd.DataFrame(index=indices)
         for symbol in self._universe:
-            hmm_model = hmm_sym[symbol]
+            if mode == 'hmm':
+                # HMM model generated samples
+                returns.loc[:, symbol], _ = hmm_dt[symbol].sample(horizon)
+            elif mode == 'eg':
+                # Gaussian generated samples (expected return & sigmas)
+                # Expected return & sigma
+                sym_return = returns_hmm.loc[dt, symbol]
+                sym_sigma = sigmas_hmm.loc[dt, symbol]
 
+                # Generate a Gaussian distribution of horizon length
+                rng = np.random.default_rng()
+                samples = rng.normal(sym_return, sym_sigma, horizon)
+                returns.loc[:, symbol] = samples
+            elif mode == 'lg':
+                # Gaussian generated samples (most likely Gaussian distribution)
+                pass
+            elif mode == 'er':
+                # Constant expected return
+                sym_return = returns_hmm.loc[dt, symbol]
+                returns.loc[:, symbol] = sym_return
 
-        #
+        # Generate volumes
+        volumes = pd.DataFrame(index=indices)
+        for i in indices:
+            for symbol in self.universe:
+                volumes.loc[i, symbol] = volumes_pred.loc[dt, symbol]
 
-        # 2. Generate volume samples for horizon
+        # Generate sigmas
+        sigmas = pd.DataFrame(index=indices)
+        for i in indices:
+            for symbol in self.universe:
+                sigmas.loc[i, symbol] = sigmas_pred.loc[dt, symbol]
 
-
-        # 3. Generate sigma samples for horizon
-
-
-        return #Scenario(returns, volumes, sigmas)
+        # Create a scenario from the inputs
+        return Scenario(dt, horizon, returns, volumes, sigmas)
 
     @staticmethod
     def win_rate_symbol_horizon(returns_pred, returns_real, symbol, horizon):
