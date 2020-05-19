@@ -7,10 +7,10 @@ import logging
 import numpy as np
 import pandas as pd
 
-from .model import ModelState
-from .scenario import Scenario
-from .ss_hmm import SingleStockHMM
-from .utils import is_pd, nearest_pd
+from model import ModelState
+from scenario import Scenario
+from ss_hmm import SingleStockHMM
+from utils import is_pd, nearest_pd
 from datetime import timedelta, datetime
 
 __all__ = ['SingleStockBLHMM']
@@ -117,7 +117,7 @@ class SingleStockBLHMM(SingleStockHMM):
 
         # Grab needed inputs
         returns_bl = self.get('returns', 'predicted')
-        return_sigmas_bl = self.get('sigmas', 'predicted')
+        return_sigmas_bl = self.get('covariance', 'predicted')
         volumes_bl = self.get('volumes', 'predicted')
         sigmas_bl = self.get('sigmas', 'predicted')
 
@@ -148,7 +148,7 @@ class SingleStockBLHMM(SingleStockHMM):
 
                 # Generate returns - expected return & sigma
                 sym_return_mean = returns_bl.loc[dt, symbol]
-                sym_return_sigma = return_sigmas_bl.loc[dt, symbol]
+                sym_return_sigma = np.sqrt(return_sigmas_bl.loc[(dt, symbol), symbol])
 
                 # Gaussian distribution of horizon length
                 rng = np.random.default_rng()
@@ -282,7 +282,7 @@ if __name__ == '__main__':
     volumes_pred = bl_hmm_model.get('volumes', 'predicted')
     sigmas_pred = bl_hmm_model.get('sigmas', 'predicted')
 
-    bl_hmm_model.prediction_quality()
+    bl_hmm_model.generate_forward_scenario(r_pred.index[100], 5)
 
     # Equilibrium results
     start_date = datetime.strptime(bl_hmm_model.cfg['start_date'], '%Y%m%d') + \
