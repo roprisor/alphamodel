@@ -102,7 +102,7 @@ class SingleStockBLHMM(SingleStockHMM):
 
         return True
 
-    def generate_forward_scenario(self, dt, horizon, mode='eg'):
+    def generate_forward_scenario(self, dt, horizon, mode='g', **kwargs):
         """
         Generate forward scenario
         :param dt: datetime to start at
@@ -155,36 +155,38 @@ class SingleStockBLHMM(SingleStockHMM):
                 samples = rng.normal(sym_return_mean, sym_return_sigma, horizon)
                 returns.loc[:, symbol] = samples
 
-                # Generate volumes
-                sym_volume_mean = volumes_bl.loc[dt, symbol]
-                sym_volume_sigma = volumes_bl.loc[:dt, symbol].std()
+                if symbol != self.risk_free_symbol:
+                    # Generate volumes
+                    sym_volume_mean = volumes_bl.loc[dt, symbol]
+                    sym_volume_sigma = volumes_bl.loc[:dt, symbol].std()
 
-                # Gaussian distribution of horizon length
-                rng = np.random.default_rng()
-                samples = rng.normal(sym_volume_mean, sym_volume_sigma, horizon)
-                volumes.loc[:, symbol] = samples
+                    # Gaussian distribution of horizon length
+                    rng = np.random.default_rng()
+                    samples = rng.normal(sym_volume_mean, sym_volume_sigma, horizon)
+                    volumes.loc[:, symbol] = samples
 
-                # Generate sigmas
-                sym_sigma_mean = sigmas_bl.loc[dt, symbol]
-                sym_sigma_sigma = sigmas_bl.loc[:dt, symbol].std()
+                    # Generate sigmas
+                    sym_sigma_mean = sigmas_bl.loc[dt, symbol]
+                    sym_sigma_sigma = sigmas_bl.loc[:dt, symbol].std()
 
-                # Gaussian distribution of horizon length
-                rng = np.random.default_rng()
-                samples = rng.normal(sym_sigma_mean, sym_sigma_sigma, horizon)
-                sigmas.loc[:, symbol] = samples
+                    # Gaussian distribution of horizon length
+                    rng = np.random.default_rng()
+                    samples = rng.normal(sym_sigma_mean, sym_sigma_sigma, horizon)
+                    sigmas.loc[:, symbol] = samples
 
             elif mode == 'c':
                 # Constant expected return
                 sym_return = returns_bl.loc[dt, symbol]
                 returns.loc[:, symbol] = sym_return
 
-                # Constant expected volume
-                sym_volume = volumes_bl.loc[dt, symbol]
-                volumes.loc[:, symbol] = sym_volume
+                if symbol != self.risk_free_symbol:
+                    # Constant expected volume
+                    sym_volume = volumes_bl.loc[dt, symbol]
+                    volumes.loc[:, symbol] = sym_volume
 
-                # Constant expected sigma
-                sym_sigma = sigmas_bl.loc[dt, symbol]
-                sigmas.loc[:, symbol] = sym_sigma
+                    # Constant expected sigma
+                    sym_sigma = sigmas_bl.loc[dt, symbol]
+                    sigmas.loc[:, symbol] = sym_sigma
 
         # Create a scenario from the inputs
         return Scenario(dt, horizon, returns, volumes, sigmas)
