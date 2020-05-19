@@ -1,12 +1,10 @@
 alpha:
-  name: rebalance_sim
+  name: hmm_sim
   universe:
     list:
       - SPY
       - EWJ
       - EWG
-      - EWH
-      - EWA
     risk_free_symbol: USDOLLAR
   drop_threshold: 0.5
   data:
@@ -16,9 +14,10 @@ alpha:
     api_key: 6XyApK2BBj_MraQg2TMD
   model:
     start_date: '19970102'
-    end_date: '20091231'
+    end_date: '20011231'
     data_dir: '../data/'
-    alpha: 0.05
+    min_periods: 3
+    halflife: 20
     horizon: 1
     train_len: 1000
     hidden_states: 2
@@ -26,5 +25,5 @@ alpha:
       sampling_freq: daily
     covariance:
       method: FF5
-      sampling_freq: daily
-      update: monthly
+      sampling_freq: monthly
+      train_days: 90

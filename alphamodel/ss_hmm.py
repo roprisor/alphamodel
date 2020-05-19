@@ -2,13 +2,15 @@
 Single stock returns - Hidden Markov Model
 """
 
+import cvxportfolio as cp
+import logging
 import numpy as np
 import pandas as pd
 import seaborn as sns
 
 from .model import Model, ModelState, SamplingFrequency
 from .scenario import Scenario
-from datetime import timedelta
+from datetime import timedelta, datetime
 from sklearn import linear_model
 from hmmlearn import hmm
 
@@ -64,7 +66,7 @@ class SingleStockHMM(Model):
 
         returns_pred = pd.DataFrame(index=test_set.index)
         sigmas_pred = pd.DataFrame(index=test_set.index)
-        state0_pred = pd.DataFrame(index=test_set.index)
+        state0_prob = pd.DataFrame(index=test_set.index)
         confidence_pred = pd.DataFrame(index=test_set.index)
         hmm_storage = {}
 
@@ -77,7 +79,7 @@ class SingleStockHMM(Model):
 
             sym_return_pred = []
             sym_sigma_pred = []
-            sym_state0_pred = []
+            sym_state0_prob = []
             sym_confidence_pred = []
 
             # For each test date in the test_set
@@ -100,24 +102,24 @@ class SingleStockHMM(Model):
                     sym_return_pred.append(float(regime_model.means_.T.dot(state_proba[-1])))  # proba weighted mean
                     sym_sigma_pred.append(float(regime_model.covars_.T.dot(state_proba[-1])))  # proba weighted sigma
                 elif mode == 't':
-                    # State return & sigma - if state passes threshold hurdle
+                    # State return & sigma - if any current state passes threshold hurdle, use it
                     if state_proba[-1][0] > threshold:
                         sym_return_pred.append(float(regime_model.means_[0]))
                         sym_sigma_pred.append(float(regime_model.covars_[0][0]))
                     elif state_proba[-1][1] > threshold:
                         sym_return_pred.append(float(regime_model.means_[1]))
                         sym_sigma_pred.append(float(regime_model.covars_[1][0]))
+                    # else default back to previous
                     else:
-                        sym_return_pred.append(float(regime_model.means_.T.dot(state_proba[-1])))  # proba weighted mean
-                        sym_sigma_pred.append(
-                            float(regime_model.covars_.T.dot(state_proba[-1])))  # proba weighted sigma
+                        sym_return_pred.append(sym_return_pred[-1])
+                        sym_sigma_pred.append(sym_sigma_pred[-1])
                 else:
                     raise ValueError('mode: {} not supported, please check function def for allowed values'.
                                      format(mode))
 
                 # Compute confidence for input into Black Litterman
                 sym_confidence_pred.append(sum(state_proba[-1] ** 4))
-                sym_state0_pred.append(state_proba[-1][0])
+                sym_state0_prob.append(state_proba[-1][0])
 
                 # Store model for later use
                 if realized_returns.index[test_idx] not in hmm_storage:
@@ -136,7 +138,7 @@ class SingleStockHMM(Model):
                                                              len=returns_pred.index.shape[0]))
             returns_pred[self._universe[symbol_idx]] = sym_return_pred
             sigmas_pred[self._universe[symbol_idx]] = sym_sigma_pred
-            state0_pred[self._universe[symbol_idx]] = sym_state0_pred
+            state0_prob[self._universe[symbol_idx]] = sym_state0_prob
             confidence_pred[self._universe[symbol_idx]] = sym_confidence_pred
 
             # Loop or no loop?
@@ -147,7 +149,7 @@ class SingleStockHMM(Model):
         self.set('returns', returns_pred, 'predicted')
         self.set('returns_hmm', returns_pred, 'predicted')
         self.set('sigmas_hmm', sigmas_pred, 'predicted')
-        self.set('state0_prob', state0_pred, 'predicted')
+        self.set('state0_prob', state0_prob, 'predicted')
         self.set('confidence', confidence_pred, 'predicted')
         self.set('models_hmm', hmm_storage, 'predicted')
 
@@ -195,7 +197,7 @@ class SingleStockHMM(Model):
 
                 # Grab asset returns for preceding train_days (90 by default)
                 used_returns = realized_returns.loc[(realized_returns.index < day) &
-                                           (realized_returns.index >= day - pd.Timedelta(str(days_back) + " days"))]
+                                                    (realized_returns.index >= day - pd.Timedelta(str(days_back) + " days"))]
                 used_ff_returns = ff_returns.loc[ff_returns.index.isin(used_returns.index)].iloc[:, :-1]
 
                 # Multi linear regression to extract factor loadings
@@ -212,12 +214,17 @@ class SingleStockHMM(Model):
                 factor_sigma[day] = used_ff_returns.cov().fillna(0)
                 # Exposures - factor loadings obtained from multi linear regression coefficients of stock on FF factors
                 exposures[day] = pd.DataFrame(data=mlr.coef_, index=realized_returns.columns).fillna(0)
-                # TODO use HMM predicted stock var
-                # Stock idiosyncratic variances - stock var minus FF var, ensure >=0
-                idyos[day] = pd.Series(np.diag(used_returns.cov().values -
-                                               exposures[day].values @ factor_sigma[day].values @ exposures[
-                                                   day].values.T),
-                                       index=realized_returns.columns).fillna(method='ffill')
+                # Stock idiosyncratic variances - HMM variance; if not avail, then stock var minus FF var, ensure >=0
+                try:
+                    t_sigma = cp.utils.time_locator(sigmas_pred, day)
+                    idyos[day] = t_sigma
+                except KeyError as e:
+                    logging.debug('predict: Day index {} not found, defaulting to factor residual idyo variance'.
+                                  format(str(day)))
+                    idyos[day] = pd.Series(np.diag(used_returns.cov().values -
+                                                   exposures[day].values @ factor_sigma[day].values @ exposures[
+                                                       day].values.T),
+                                           index=realized_returns.columns).fillna(method='ffill')
                 idyos[day][idyos[day] < 0] = 0
 
             self.set('factor_sigma', pd.concat(factor_sigma.values(), axis=0, keys=factor_sigma.keys()), 'predicted')
@@ -230,7 +237,7 @@ class SingleStockHMM(Model):
         else:
             raise NotImplemented('Covariance section needs to be defined under ss_hmm model config and needs either:\n'
                                  ' - SS (single stock returns)\n'
-                                 '- FF5 (Fama French 5 factor returns).')
+                                 ' - FF5 (Fama French 5 factor returns).')
 
         self.__state = ModelState.PREDICTED
         return True
@@ -243,10 +250,10 @@ class SingleStockHMM(Model):
         Generate forward scenario
         :param dt: datetime to start at
         :param horizon: periods ahead to be included in the scenario
-        :param mode:    eg = expected Gaussian (Gaussian of expected return & sigma)
+        :param mode:    eg = Gaussian sampled scenario (Gaussian of expected mean & sigma for values)
                         lg = likely Gaussian (highest likelihood return & sigma)
-                        er = expected return (constant)
-                        hmm = HMM (fit parameters to historical training data)
+                        c = constant scenario
+                        hmm = HMM sampled scenario (fit parameters to historical training data)
         :param threshold: likelihood threshold for 'lg' mode to pick 1 state
         :return:
         """
@@ -312,7 +319,7 @@ class SingleStockHMM(Model):
                 samples = rng.normal(sym_return, sym_sigma, horizon)
                 returns.loc[:, symbol] = samples
 
-            elif mode == 'er':
+            elif mode == 'c':
                 # Constant expected return
                 sym_return = returns_hmm.loc[dt, symbol]
                 returns.loc[:, symbol] = sym_return
@@ -402,5 +409,72 @@ class SingleStockHMM(Model):
 if __name__ == '__main__':
     ss_hmm_model = SingleStockHMM('../examples/cvxpt_hmm.yml')
     ss_hmm_model.train(force=True)
+
+    # Realized Data for Simulation
+    prices = ss_hmm_model.get('prices', 'realized', ss_hmm_model.cfg['returns']['sampling_freq']).iloc[1:, :]
+    returns = ss_hmm_model.get('returns', 'realized', ss_hmm_model.cfg['returns']['sampling_freq'])
+    volumes = ss_hmm_model.get('volumes', 'realized', ss_hmm_model.cfg['returns']['sampling_freq'])
+    sigmas = ss_hmm_model.get('sigmas', 'realized', ss_hmm_model.cfg['returns']['sampling_freq'])
+
+    simulated_tcost = cp.TcostModel(half_spread=0.0005 / 2., nonlin_coeff=1., sigma=sigmas, volume=volumes)
+    simulated_hcost = cp.HcostModel(borrow_costs=0.0001)
+    simulator = cp.MarketSimulator(returns, costs=[simulated_tcost, simulated_hcost],
+                                   market_volumes=volumes, cash_key=ss_hmm_model.risk_free_symbol)
+
     ss_hmm_model.predict()
     ss_hmm_model.prediction_quality()
+
+    r_pred = ss_hmm_model.get('returns', 'predicted')
+    conf_pred = ss_hmm_model.get('confidence', 'predicted')
+    volumes_pred = ss_hmm_model.get('volumes', 'predicted')
+    sigmas_pred = ss_hmm_model.get('sigmas', 'predicted')
+
+    ss_hmm_model.prediction_quality()
+
+    # Equilibrium results
+    start_date = datetime.strptime(ss_hmm_model.cfg['start_date'], '%Y%m%d') + \
+                 timedelta(days=ss_hmm_model.cfg['train_len']*1.75)
+    end_date = datetime.strptime(ss_hmm_model.cfg['end_date'], '%Y%m%d')
+
+    w_equal = pd.Series(index=r_pred.columns, data=[1] * len(r_pred.columns))
+    w_equal.loc['USDOLLAR'] = 0.
+    w_equal = w_equal / sum(w_equal)
+
+    optimization_tcost = cp.TcostModel(half_spread=0.0005/2., nonlin_coeff=1.,
+                                       sigma=sigmas_pred,
+                                       volume=volumes_pred)
+    optimization_hcost=cp.HcostModel(borrow_costs=0.0001)
+
+    if ss_hmm_model.cfg['covariance']['method'] == 'SS':
+        spo_risk_model = cp.FullSigma(ss_hmm_model.get('covariance', 'predicted'))
+    elif ss_hmm_model.cfg['covariance']['method'] == 'FF5':
+        spo_risk_model = cp.FactorModelSigma(ss_hmm_model.get('exposures', 'predicted'),
+                                             ss_hmm_model.get('factor_sigma', 'predicted'),
+                                             ss_hmm_model.get('idyos', 'predicted'))
+    else:
+        raise NotImplemented('The %s risk model is not implemented yet'.format(ss_hmm_model.cfg['risk']))
+
+    logging.basicConfig(level=logging.INFO)
+
+    # Optimization parameters
+    gamma_risk, gamma_trade, gamma_hold = 5., 15., 1.
+    leverage_limit = cp.LeverageLimit(1)
+    min_weight = cp.MinWeights(-0.5)
+    max_weight = cp.MaxWeights(0.5)
+    long_only = cp.LongOnly()
+
+    # Optimization policy
+    c_mpc_policy = cp.ModelPredictiveControlScenarioOpt(alphamodel=ss_hmm_model, horizon=5, scenarios=5,
+                                                        scenario_mode='lg', costs=[gamma_risk*spo_risk_model,
+                                                                                   gamma_trade*optimization_tcost,
+                                                                                   gamma_hold*optimization_hcost],
+                                                        constraints=[leverage_limit, min_weight, max_weight, long_only],
+                                                        return_target=0.0015, mpc_method='c',
+                                                        trading_freq='day')
+
+    # Backtest
+    c_mpc_results = simulator.run_multiple_backtest(1E6*w_equal,
+                                                    start_time=start_date,  end_time=end_date,
+                                                    policies=[c_mpc_policy],
+                                                    loglevel=logging.INFO, parallel=True)
+    c_mpc_results[0].summary()
