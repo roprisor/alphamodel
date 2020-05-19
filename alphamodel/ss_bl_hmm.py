@@ -7,10 +7,10 @@ import logging
 import numpy as np
 import pandas as pd
 
-from model import ModelState
-from scenario import Scenario
-from ss_hmm import SingleStockHMM
-from utils import is_pd, nearest_pd
+from .model import ModelState
+from .scenario import Scenario
+from .ss_hmm import SingleStockHMM
+from .utils import is_pd, nearest_pd
 from datetime import timedelta, datetime
 
 __all__ = ['SingleStockBLHMM']
