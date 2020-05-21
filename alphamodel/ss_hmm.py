@@ -11,7 +11,7 @@ import seaborn as sns
 from .model import Model, ModelState, SamplingFrequency
 from .scenario import Scenario
 from datetime import timedelta, datetime
-from sklearn import linear_model
+from sklearn import linear_model, metrics
 from hmmlearn import hmm
 
 __all__ = ['SingleStockHMM']
@@ -54,7 +54,7 @@ class SingleStockHMM(Model):
         realized_returns = self.get('returns', data_type='realized', sampling_freq=self.cfg['returns']['sampling_freq'])
         realized_volumes = self.get('volumes', data_type='realized', sampling_freq=self.cfg['returns']['sampling_freq'])
         realized_sigmas = self.get('sigmas', data_type='realized', sampling_freq=self.cfg['returns']['sampling_freq'])
-        print("Typical variance of returns: %g" % realized_returns.var().mean())
+        logging.info("Typical variance of returns: %g" % realized_returns.var().mean())
 
         # Split data in train & test data sets
         start_idx_train = 0
@@ -75,7 +75,7 @@ class SingleStockHMM(Model):
 
         # For each asset
         while symbol_idx < len(self._universe):
-            print('Running for ticker: {s}'.format(s=self._universe[symbol_idx]))
+            logging.info('Running for ticker: {s}'.format(s=self._universe[symbol_idx]))
 
             sym_return_pred = []
             sym_sigma_pred = []
@@ -132,9 +132,9 @@ class SingleStockHMM(Model):
                 test_idx += 1
 
             # Store prediction results for this symbol
-            print('\n{sym} return pred length: {len}'.format(sym=self._universe[symbol_idx],
+            logging.debug('\n{sym} return pred length: {len}'.format(sym=self._universe[symbol_idx],
                                                              len=len(sym_return_pred)))
-            print('\n{sym} return real length: {len}'.format(sym=self._universe[symbol_idx],
+            logging.debug('\n{sym} return real length: {len}'.format(sym=self._universe[symbol_idx],
                                                              len=returns_pred.index.shape[0]))
             returns_pred[self._universe[symbol_idx]] = sym_return_pred
             sigmas_pred[self._universe[symbol_idx]] = sym_sigma_pred
@@ -206,7 +206,7 @@ class SingleStockHMM(Model):
                 mlr.predict(used_ff_returns)
 
                 # Track performance of FF fit
-                rscore = mlr.score(used_ff_returns, used_returns)
+                rscore = metrics.r2_score(used_ff_returns, used_returns)
                 cov_rscore.append(rscore)
                 print('predict_cov_FF5: mlr score = {s}'.format(s=rscore))
 

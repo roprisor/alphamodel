@@ -7,7 +7,7 @@ import pandas as pd
 import seaborn as sns
 
 from .model import Model, SamplingFrequency
-from sklearn import linear_model
+from sklearn import linear_model, metrics
 
 __all__ = ['SingleStockEWM']
 
@@ -98,7 +98,7 @@ class SingleStockEWM(Model):
                 mlr.predict(used_ff_returns)
 
                 # Track performance of FF fit
-                rscore = mlr.score(used_ff_returns, used_returns)
+                rscore = metrics.r2_score(used_ff_returns, used_returns)
                 cov_rscore.append(rscore)
                 print('predict_cov_FF5: mlr score = {s}'.format(s=rscore))
 
