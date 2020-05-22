@@ -197,16 +197,17 @@ class SingleStockHMM(Model):
 
                 # Grab asset returns for preceding train_days (90 by default)
                 used_returns = realized_returns.loc[(realized_returns.index < day) &
-                                                    (realized_returns.index >= day - pd.Timedelta(str(days_back) + " days"))]
+                                                    (realized_returns.index >= day - pd.Timedelta(str(days_back)
+                                                                                                  + " days"))]
                 used_ff_returns = ff_returns.loc[ff_returns.index.isin(used_returns.index)].iloc[:, :-1]
 
                 # Multi linear regression to extract factor loadings
                 mlr = linear_model.LinearRegression()
                 mlr.fit(used_ff_returns, used_returns)
-                mlr.predict(used_ff_returns)
+                used_ret_pred = mlr.predict(used_ff_returns)
 
                 # Track performance of FF fit
-                rscore = metrics.r2_score(used_ff_returns, used_returns)
+                rscore = metrics.r2_score(used_ff_returns, used_ret_pred, multioutput='uniform_average')
                 cov_rscore.append(rscore)
                 print('predict_cov_FF5: mlr score = {s}'.format(s=rscore))
 
