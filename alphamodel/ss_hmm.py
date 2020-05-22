@@ -207,7 +207,7 @@ class SingleStockHMM(Model):
                 used_ret_pred = mlr.predict(used_ff_returns)
 
                 # Track performance of FF fit
-                rscore = metrics.r2_score(used_ff_returns, used_ret_pred, multioutput='uniform_average')
+                rscore = metrics.r2_score(used_returns, used_ret_pred, multioutput='uniform_average')
                 cov_rscore.append(rscore)
                 print('predict_cov_FF5: mlr score = {s}'.format(s=rscore))
 
@@ -226,7 +226,7 @@ class SingleStockHMM(Model):
                                                    exposures[day].values @ factor_sigma[day].values @ exposures[
                                                        day].values.T),
                                            index=realized_returns.columns).fillna(method='ffill')
-                idyos[day][idyos[day] < 0] = 0
+                idyos[day].loc[idyos[day] < 0] = 0
 
             self.set('factor_sigma', pd.concat(factor_sigma.values(), axis=0, keys=factor_sigma.keys()), 'predicted')
             self.set('exposures', pd.concat(exposures.values(), axis=0, keys=exposures.keys()), 'predicted')
