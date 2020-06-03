@@ -30,12 +30,15 @@ class SingleStockHMM(Model):
 
         return success
 
-    def predict(self, mode='e', threshold=0.8, **kwargs):
+    def predict(self, mode='e', threshold=0.8, preprocess=None, **kwargs):
         """
         Prediction function for model, for out of sample historical test set
         :param mode:    e = expected return & sigma (probability weighted)
                         t = state with probability over threshold return & sigma
         :param threshold: probability threshold for state to be fully selected
+        :param preprocess: preprocessing method
+                            None: raw return data
+                            'exponential': exponential decay
 
         :return: n/a (all data stored in self.predicted)
         """
@@ -87,7 +90,9 @@ class SingleStockHMM(Model):
                 # Grab train_set
                 # Which one is better?
                 train_set_idx = realized_returns.iloc[(test_idx - train_len):test_idx, symbol_idx]
-                # train_set_idx = returns.iloc[0:test_idx, symbol_idx]
+
+                if preprocess == 'exponential':
+                    train_set_idx = train_set_idx.ewm(halflife=halflife).mean()
 
                 # Fit the returns to an HMM model
                 train_set_hmm = train_set_idx.values.reshape(-1, 1)
@@ -109,10 +114,17 @@ class SingleStockHMM(Model):
                     elif state_proba[-1][1] > threshold:
                         sym_return_pred.append(float(regime_model.means_[1]))
                         sym_sigma_pred.append(float(regime_model.covars_[1][0]))
-                    # else default back to previous
+                    # else default back to previous if available
                     else:
-                        sym_return_pred.append(sym_return_pred[-1])
-                        sym_sigma_pred.append(sym_sigma_pred[-1])
+                        if sym_return_pred and sym_sigma_pred:
+                            sym_return_pred.append(sym_return_pred[-1])
+                            sym_sigma_pred.append(sym_sigma_pred[-1])
+                        else:
+                            # Expected return & sigma
+                            sym_return_pred.append(
+                                float(regime_model.means_.T.dot(state_proba[-1])))  # proba weighted mean
+                            sym_sigma_pred.append(
+                                float(regime_model.covars_.T.dot(state_proba[-1])))  # proba weighted sigma
                 else:
                     raise ValueError('mode: {} not supported, please check function def for allowed values'.
                                      format(mode))
@@ -209,7 +221,7 @@ class SingleStockHMM(Model):
                 # Track performance of FF fit
                 rscore = metrics.r2_score(used_returns, used_ret_pred, multioutput='uniform_average')
                 cov_rscore.append(rscore)
-                print('predict_cov_FF5: mlr score = {s}'.format(s=rscore))
+                logging.debug('predict_cov_FF5: mlr score = {s}'.format(s=rscore))
 
                 # Factor covariance - on FF returns
                 factor_sigma[day] = used_ff_returns.cov().fillna(0)
@@ -359,10 +371,9 @@ class SingleStockHMM(Model):
         return np.sum(np.sign(returns.loc[:, symbol + '_pred']) == np.sign(returns.loc[:, symbol + '_real'])) \
             / returns.shape[0]
 
-    @staticmethod
-    def win_rate(returns_pred, returns_real, symbol=None, horizon=None):
+    def win_rate(self, returns_pred, returns_real, symbol=None, horizon=None, print=True):
         """
-        Compute % of alpha values in the correct direction - sample horizons, all symbols
+        Compute % of alpha values in the correct direction - sample horizons, all symbols (-risk_free)
         """
         # Input processing
         if not horizon:
@@ -376,7 +387,7 @@ class SingleStockHMM(Model):
         win_rate_all = pd.DataFrame(index=horizons)
 
         # Compute win rate for each symbol
-        for symbol in returns_pred.columns:
+        for symbol in self.universe:
             win_rate = []
             for horizon in horizons:
                 win_rate.append(SingleStockHMM.win_rate_symbol_horizon(returns_pred, returns_real, symbol, horizon))
@@ -386,13 +397,36 @@ class SingleStockHMM(Model):
         win_rate_all = win_rate_all.agg(['mean', 'std'], axis=1).merge(win_rate_all, left_index=True, right_index=True)
 
         # Formatting
-        cm = sns.light_palette("green", as_cmap=True)
-        return win_rate_all.style.background_gradient(cmap=cm).format("{:.1%}")
+        if print:
+            cm = sns.light_palette("green", as_cmap=True)
+            win_rate_all.style.background_gradient(cmap=cm).format("{:.1%}")
+        return win_rate_all
 
-    def prediction_quality(self, statistic='win_rate', **kwargs):
+    def information_coef(self, returns_pred, returns_real, symbol=None, horizon=None, print=True):
+        """
+        Compute IC of alpha values - sample horizons, all symbols (-risk_free)
+        """
+        # 1. Process the win rate for the given inputs
+        wr = self.win_rate(returns_pred, returns_real, symbol, horizon)
+
+        # 2. Transform the win rate into information coefficient: IC = 2 * WR - 1
+        wr = wr[self.universe]
+        ic = 2 * wr - 1
+
+        # Compute statistics across all symbols
+        ic = ic.agg(['mean', 'std'], axis=1).merge(ic, left_index=True, right_index=True)
+
+        # Formatting
+        if print:
+            cm = sns.light_palette("green", as_cmap=True)
+            ic.style.background_gradient(cmap=cm).format("{:.1f}")
+        return ic
+
+    def prediction_quality(self, statistic='win_rate', print=True, **kwargs):
         """
         Compute prediction quality
-        :param statistic:
+        :param statistic: type of statistic
+        :param print: True to show plots, False for silent
         :return:
         """
         if statistic == 'win_rate':
@@ -401,7 +435,14 @@ class SingleStockHMM(Model):
             predicted_returns = self.get('returns', data_type='predicted',
                                          sampling_freq=self.cfg['returns']['sampling_freq'])
 
-            return SingleStockHMM.win_rate(predicted_returns, realized_returns, **kwargs)
+            return self.win_rate(predicted_returns, realized_returns, print, **kwargs)
+        elif statistic == 'information_coefficient':
+            realized_returns = self.get('returns', data_type='realized',
+                                        sampling_freq=self.cfg['returns']['sampling_freq'])
+            predicted_returns = self.get('returns', data_type='predicted',
+                                         sampling_freq=self.cfg['returns']['sampling_freq'])
+
+            return self.information_coef(predicted_returns, realized_returns, print, **kwargs)
 
     def show_results(self):
         pass
@@ -422,15 +463,13 @@ if __name__ == '__main__':
     simulator = cp.MarketSimulator(returns, costs=[simulated_tcost, simulated_hcost],
                                    market_volumes=volumes, cash_key=ss_hmm_model.risk_free_symbol)
 
-    ss_hmm_model.predict()
-    ss_hmm_model.prediction_quality()
+    ss_hmm_model.predict(mode='t', preprocess=None)
+    ss_hmm_model.prediction_quality(statistic='information_coefficient')
 
     r_pred = ss_hmm_model.get('returns', 'predicted')
     conf_pred = ss_hmm_model.get('confidence', 'predicted')
     volumes_pred = ss_hmm_model.get('volumes', 'predicted')
     sigmas_pred = ss_hmm_model.get('sigmas', 'predicted')
-
-    ss_hmm_model.prediction_quality()
 
     # Equilibrium results
     start_date = datetime.strptime(ss_hmm_model.cfg['start_date'], '%Y%m%d') + \
