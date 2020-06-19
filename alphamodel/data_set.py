@@ -120,6 +120,7 @@ class QuandlTimeSeriesDataSet(TimeSeriesDataSet):
         self.__name = config['name']
         self.__table = config['table']
         self.__api_key = config['api_key']
+        self.columns = []
 
         # Optional configs
         self.freq = config['freq'] if 'freq' in config else None
@@ -164,11 +165,16 @@ class QuandlTimeSeriesDataSet(TimeSeriesDataSet):
 
         try:
             if cols is None:
-                return quandl.get(self.to_quandl_ticker(financial_asset), start_date=start_date, end_date=end_date,
-                                  api_key=self.__api_key, collapse=freq_str)
+                result = quandl.get(self.to_quandl_ticker(financial_asset), start_date=start_date, end_date=end_date,
+                                    api_key=self.__api_key, collapse=freq_str)
+                if type(self.columns) != pd.Index:
+                    self.columns = result.columns
+                return result
             else:
                 if type(cols) == str:
                     cols = [cols]
+                if type(self.columns) != pd.Index:
+                    self.columns = cols
                 return quandl.get(self.to_quandl_ticker(financial_asset), start_date=start_date, end_date=end_date,
                                   api_key=self.__api_key, collapse=freq_str)[cols]
         except quandl.NotFoundError as e:
@@ -180,8 +186,9 @@ if __name__ == '__main__':
     import yaml
     from datetime import datetime
 
-    with open('/alphamodel/examples/cvxpt_ewm.yml') as cfg_file:
+    with open('../examples/cvxpt_ewm.yml') as cfg_file:
         yml_cfg = yaml.load(cfg_file, yaml.SafeLoader)
+        yml_cfg['alpha']['data']['table'] = 'FRED'
         ds = TimeSeriesDataSet.init(yml_cfg['alpha'])
 
     spy_data = ds.get('SPY', datetime(2017, 1, 1), datetime(2018, 12, 31), ['Adj_Close', 'Adj_Volume'], 'monthly')

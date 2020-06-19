@@ -326,16 +326,23 @@ class Model(metaclass=ABCMeta):
             dict(zip(keys, [select_first_valid_column(raw_data[k], ["Adj_Close", "Close", "Value"])
                             for k in keys])))
 
-        # compute sigmas
-        open_prices = pd.DataFrame.from_dict(
-            dict(zip(keys, [select_first_valid_column(raw_data[k], ["Open"]) for k in keys])))
-        close_prices = pd.DataFrame.from_dict(
-            dict(zip(keys, [select_first_valid_column(raw_data[k], ["Close"]) for k in keys])))
+        if 'Open' in self.data_source.columns and 'Close' in self.data_source.columns:
+            # compute sigmas
+            open_prices = pd.DataFrame.from_dict(
+                dict(zip(keys, [select_first_valid_column(raw_data[k], ["Open"]) for k in keys])))
+            close_prices = pd.DataFrame.from_dict(
+                dict(zip(keys, [select_first_valid_column(raw_data[k], ["Close"]) for k in keys])))
 
-        # extract volumes
-        volumes = pd.DataFrame.from_dict(dict(zip(keys, [select_first_valid_column(raw_data[k],
-                                                                                   ["Adj_Volume", "Volume"])
-                                                         for k in keys])))
+            self.set('open_prices', open_prices, data_type='realized', sampling_freq=sampling_freq)
+            self.set('close_prices', close_prices, data_type='realized', sampling_freq=sampling_freq)
+
+        if 'Volume' in self.data_source.columns or 'Adj_Volume' in self.data_source.columns:
+            # extract volumes
+            volumes = pd.DataFrame.from_dict(dict(zip(keys, [select_first_valid_column(raw_data[k],
+                                                                                       ["Adj_Volume", "Volume"])
+                                                             for k in keys])))
+
+            self.set('volumes', volumes, data_type='realized', sampling_freq=sampling_freq)
 
         # fix risk free
         prices[self.risk_free_symbol] = 10000 * (1 + prices[self.risk_free_symbol] / (100 * 250)).cumprod()
@@ -343,9 +350,6 @@ class Model(metaclass=ABCMeta):
         # #### Save raw price data
         self.set('raw_data', raw_data, data_type='realized', sampling_freq=sampling_freq)
         self.set('prices', prices, data_type='realized', sampling_freq=sampling_freq)
-        self.set('open_prices', open_prices, data_type='realized', sampling_freq=sampling_freq)
-        self.set('close_prices', close_prices, data_type='realized', sampling_freq=sampling_freq)
-        self.set('volumes', volumes, data_type='realized', sampling_freq=sampling_freq)
 
         return True
 
@@ -354,13 +358,18 @@ class Model(metaclass=ABCMeta):
         Validate and sync up return data
         :return:
         """
+        range_avail = 'Open' in self.data_source.columns and 'Close' in self.data_source.columns
+        volume_avail = 'Volume' in self.data_source.columns or 'Adj_Volume' in self.data_source.columns
+
         # For each sampling frequency, validate the data & store problem assets/dates
         for freq in self._realized:
             # Grab stored raw market data
             prices = self.get('prices', data_type='realized', sampling_freq=freq)
-            open_prices = self.get('open_prices', data_type='realized', sampling_freq=freq)
-            close_prices = self.get('close_prices', data_type='realized', sampling_freq=freq)
-            volumes = self.get('volumes', data_type='realized', sampling_freq=freq)
+            if range_avail:
+                open_prices = self.get('open_prices', data_type='realized', sampling_freq=freq)
+                close_prices = self.get('close_prices', data_type='realized', sampling_freq=freq)
+            if volume_avail:
+                volumes = self.get('volumes', data_type='realized', sampling_freq=freq)
 
             # Validate prices
             # Filter NaNs - threshold at 2% missing values
@@ -371,10 +380,17 @@ class Model(metaclass=ABCMeta):
             # Fix dates on which many assets have missing values
             nassets = prices.shape[1]
             bad_dates_p = prices.index[prices.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
-            bad_dates_o = open_prices.index[open_prices.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
-            bad_dates_c = close_prices.index[close_prices.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
-            bad_dates_v = volumes.index[volumes.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
-            bad_dates = set(bad_dates_p).union(set(bad_dates_o)).union(set(bad_dates_c)).union(set(bad_dates_v))
+            if range_avail:
+                bad_dates_o = open_prices.index[open_prices.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
+                bad_dates_c = close_prices.index[close_prices.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
+            if volume_avail:
+                bad_dates_v = volumes.index[volumes.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
+
+            bad_dates = set(bad_dates_p)
+            if range_avail:
+                bad_dates = bad_dates.union(set(bad_dates_o)).union(set(bad_dates_c))
+            if volume_avail:
+                bad_dates = bad_dates.union(set(bad_dates_v))
 
             # Maintain list of removed dates across all data fetches
             if len(bad_dates):
@@ -393,87 +409,93 @@ class Model(metaclass=ABCMeta):
         for freq in self._realized:
             # Grab stored raw market data
             prices = self.get('prices', data_type='realized', sampling_freq=freq)
-            open_prices = self.get('open_prices', data_type='realized', sampling_freq=freq)
-            close_prices = self.get('close_prices', data_type='realized', sampling_freq=freq)
-            volumes = self.get('volumes', data_type='realized', sampling_freq=freq)
+            if range_avail:
+                open_prices = self.get('open_prices', data_type='realized', sampling_freq=freq)
+                close_prices = self.get('close_prices', data_type='realized', sampling_freq=freq)
+            if volume_avail:
+                volumes = self.get('volumes', data_type='realized', sampling_freq=freq)
 
             # Filter NaNs - threshold at 2% missing values
             if len(self.__removed_assets):
                 print('%s assets %s have too many NaNs, removing them' % (str(freq), self.__removed_assets))
 
                 prices = prices.loc[:, ~prices.columns.isin(self.__removed_assets)]
-                open_prices = open_prices.loc[:, ~open_prices.columns.isin(self.__removed_assets)]
-                close_prices = close_prices.loc[:, ~close_prices.columns.isin(self.__removed_assets)]
-                volumes = volumes.loc[:, ~volumes.columns.isin(self.__removed_assets)]
+                if range_avail:
+                    open_prices = open_prices.loc[:, ~open_prices.columns.isin(self.__removed_assets)]
+                    close_prices = close_prices.loc[:, ~close_prices.columns.isin(self.__removed_assets)]
+                if volume_avail:
+                    volumes = volumes.loc[:, ~volumes.columns.isin(self.__removed_assets)]
 
             # Fix dates on which many assets have missing values
             if len(self.__removed_dates):
                 bad_dates_idx = pd.Index(self.__removed_dates).sort_values()
                 print("Removing these days from dataset:")
-                print(pd.DataFrame({'nan price': prices.isnull().sum(1)[bad_dates_idx],
-                                    'nan open price': open_prices.isnull().sum(1)[bad_dates_idx],
-                                    'nan close price': close_prices.isnull().sum(1)[bad_dates_idx],
-                                    'nan volumes': volumes.isnull().sum(1)[bad_dates_idx]}))
+                print(pd.DataFrame({'nan price': prices.isnull().sum(1)[bad_dates_idx]}))
 
                 prices = prices.loc[~prices.index.isin(bad_dates_idx)]
-                open_prices = open_prices.loc[~open_prices.index.isin(bad_dates_idx)]
-                close_prices = close_prices.loc[~close_prices.index.isin(bad_dates_idx)]
-                volumes = volumes.loc[~volumes.index.isin(bad_dates_idx)]
+                if range_avail:
+                    open_prices = open_prices.loc[~open_prices.index.isin(bad_dates_idx)]
+                    close_prices = close_prices.loc[~close_prices.index.isin(bad_dates_idx)]
+                if volume_avail:
+                    volumes = volumes.loc[~volumes.index.isin(bad_dates_idx)]
 
             # Fix prices
-            if sum([x.isnull().sum().sum() for x in [prices, open_prices, close_prices, volumes]]) != 0:
-                print(pd.DataFrame({'remaining nan price': prices.isnull().sum(),
-                                    'remaining nan open price': open_prices.isnull().sum(),
-                                    'remaining nan close price': close_prices.isnull().sum(),
-                                    'remaining nan volumes': volumes.isnull().sum()}))
+            if sum([x.isnull().sum().sum() for x in [prices]]) != 0:
+                print(pd.DataFrame({'remaining nan price': prices.isnull().sum()}))
                 print('Proceeding with forward fills to remove remaining NaNs')
 
-            # ### Calculate sigmas
-            sigmas = np.abs(np.log(open_prices.astype(float)) - np.log(close_prices.astype(float)))
+            if range_avail:
+                # ### Calculate sigmas
+                sigmas = np.abs(np.log(open_prices.astype(float)) - np.log(close_prices.astype(float)))
 
-            # #### Calculate volumes
-            # Make volumes in dollars
-            volumes = volumes * prices
+            if volume_avail:
+                # #### Calculate volumes
+                # Make volumes in dollars
+                volumes = volumes * prices
 
             # Forward fill any gaps
             prices = prices.fillna(method='ffill')
-            open_prices = open_prices.fillna(method='ffill')
-            close_prices = close_prices.fillna(method='ffill')
-            sigmas = sigmas.fillna(method='ffill')
-            volumes = volumes.fillna(method='ffill')
+            if range_avail:
+                open_prices = open_prices.fillna(method='ffill')
+                close_prices = close_prices.fillna(method='ffill')
+                sigmas = sigmas.fillna(method='ffill')
+            if volume_avail:
+                volumes = volumes.fillna(method='ffill')
 
             # Also remove the first row just in case it had gaps since we can't forward fill it
             prices = prices.iloc[1:]
-            open_prices = open_prices.iloc[1:]
-            close_prices = close_prices.iloc[1:]
-            sigmas = sigmas.iloc[1:]
-            volumes = volumes.iloc[1:]
+            if range_avail:
+                open_prices = open_prices.iloc[1:]
+                close_prices = close_prices.iloc[1:]
+                sigmas = sigmas.iloc[1:]
+            if volume_avail:
+                volumes = volumes.iloc[1:]
 
             # At this point there should be no NaNs remaining
-            if sum([x.isnull().sum().sum() for x in [prices, open_prices, close_prices, volumes, sigmas]]) != 0:
-                print(pd.DataFrame({'remaining nan price': prices.isnull().sum(),
-                                    'remaining nan open price': open_prices.isnull().sum(),
-                                    'remaining nan close price': close_prices.isnull().sum(),
-                                    'remaining nan volumes': volumes.isnull().sum(),
-                                    'remaining nan sigmas': sigmas.isnull().sum()}))
+            if sum([x.isnull().sum().sum() for x in [prices]]) != 0:
+                print(pd.DataFrame({'remaining nan price': prices.isnull().sum()}))
 
             # #### Compute returns
             returns = (prices.diff() / prices.shift(1)).fillna(method='ffill').iloc[1:]
 
             # Remove USDOLLAR except from returns
             prices = prices.iloc[:, :-1]
-            open_prices = open_prices.iloc[:, :-1]
-            close_prices = close_prices.iloc[:, :-1]
-            sigmas = sigmas.iloc[:, :-1]
-            volumes = volumes.iloc[:, :-1]
+            if range_avail:
+                open_prices = open_prices.iloc[:, :-1]
+                close_prices = close_prices.iloc[:, :-1]
+                sigmas = sigmas.iloc[:, :-1]
+            if volume_avail:
+                volumes = volumes.iloc[:, :-1]
 
             # Save all calculated data
             self.set('prices', prices, data_type='realized', sampling_freq=freq)
-            self.set('open_prices', open_prices, data_type='realized', sampling_freq=freq)
-            self.set('close_prices', close_prices, data_type='realized', sampling_freq=freq)
-            self.set('volumes', volumes, data_type='realized', sampling_freq=freq)
-            self.set('sigmas', sigmas, data_type='realized', sampling_freq=freq)
             self.set('returns', returns, data_type='realized', sampling_freq=freq)
+            if range_avail:
+                self.set('open_prices', open_prices, data_type='realized', sampling_freq=freq)
+                self.set('close_prices', close_prices, data_type='realized', sampling_freq=freq)
+                self.set('sigmas', sigmas, data_type='realized', sampling_freq=freq)
+            if volume_avail:
+                self.set('volumes', volumes, data_type='realized', sampling_freq=freq)
 
         return True
 

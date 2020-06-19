@@ -53,6 +53,11 @@ class SingleStockHMM(Model):
         train_len = self.cfg['train_len']
         hidden_states = self.cfg['hidden_states']
 
+        # Save new configs for later
+        self.cfg['mode'] = mode
+        self.cfg['threshold'] = threshold
+        self.cfg['preprocess'] = preprocess
+
         # ## Estimates - Returns
         realized_returns = self.get('returns', data_type='realized', sampling_freq=self.cfg['returns']['sampling_freq'])
         realized_volumes = self.get('volumes', data_type='realized', sampling_freq=self.cfg['returns']['sampling_freq'])
@@ -145,9 +150,9 @@ class SingleStockHMM(Model):
 
             # Store prediction results for this symbol
             logging.debug('\n{sym} return pred length: {len}'.format(sym=self._universe[symbol_idx],
-                                                             len=len(sym_return_pred)))
+                                                                     len=len(sym_return_pred)))
             logging.debug('\n{sym} return real length: {len}'.format(sym=self._universe[symbol_idx],
-                                                             len=returns_pred.index.shape[0]))
+                                                                     len=returns_pred.index.shape[0]))
             returns_pred[self._universe[symbol_idx]] = sym_return_pred
             sigmas_pred[self._universe[symbol_idx]] = sym_sigma_pred
             state0_prob[self._universe[symbol_idx]] = sym_state0_prob
@@ -399,7 +404,8 @@ class SingleStockHMM(Model):
         # Formatting
         if print:
             cm = sns.light_palette("green", as_cmap=True)
-            win_rate_all.style.background_gradient(cmap=cm).format("{:.1%}")
+            return win_rate_all.style.background_gradient(cmap=cm).format("{:.1%}")
+
         return win_rate_all
 
     def information_coef(self, returns_pred, returns_real, symbol=None, horizon=None, print=True):
@@ -407,7 +413,7 @@ class SingleStockHMM(Model):
         Compute IC of alpha values - sample horizons, all symbols (-risk_free)
         """
         # 1. Process the win rate for the given inputs
-        wr = self.win_rate(returns_pred, returns_real, symbol, horizon)
+        wr = self.win_rate(returns_pred, returns_real, symbol, horizon, print=False)
 
         # 2. Transform the win rate into information coefficient: IC = 2 * WR - 1
         wr = wr[self.universe]
@@ -419,8 +425,55 @@ class SingleStockHMM(Model):
         # Formatting
         if print:
             cm = sns.light_palette("green", as_cmap=True)
-            ic.style.background_gradient(cmap=cm).format("{:.1f}")
+            return ic.style.background_gradient(cmap=cm).format("{:.1f}")
+
         return ic
+
+    def jitter(self, print=True):
+        """
+        Compute % of state jumps out of total periods
+        """
+        # Initialize data frame
+        jitter = pd.DataFrame()
+
+        # Grab prediction since need to put into the context of the model
+        returns_pred = self.get('returns', 'predicted')
+        date_model_store = self.get('models_hmm', 'predicted')
+
+        # For each symbol in the universe
+        for symbol in self.universe:
+            transitions = 0
+            regime = 0
+
+            # For each date in the period
+            for date in date_model_store:
+                means = date_model_store[date][symbol].means_
+                high_return = means[0] if means[0] > means[1] else means[1]
+                chosen = returns_pred.loc[date, symbol]
+
+                # Did we choose the high return regime
+                if abs(high_return - chosen) < 1e-6:
+                    if regime == -1:
+                        transitions += 1
+                    regime = 1
+                else:
+                    if regime == 1:
+                        transitions += 1
+                    regime = -1
+
+            jitter.loc[1, symbol] = transitions / len(date_model_store.keys())
+            logging.debug('jitter: Symbol {} had {} regime transitions in {} periods'.format(
+                symbol, transitions, len(date_model_store.keys())))
+
+        # Compute statistics across all symbols
+        jitter_all = jitter.agg(['mean', 'std'], axis=1).merge(jitter, left_index=True, right_index=True)
+
+        # Formatting
+        if print:
+            cm = sns.light_palette("green", as_cmap=True)
+            return jitter_all.style.background_gradient(cmap=cm).format("{:.1%}")
+
+        return jitter_all
 
     def prediction_quality(self, statistic='win_rate', print=True, **kwargs):
         """
@@ -429,6 +482,9 @@ class SingleStockHMM(Model):
         :param print: True to show plots, False for silent
         :return:
         """
+        if self.__state != ModelState.PREDICTED:
+            raise ValueError('Need to run predict before we can generate prediction quality statistics')
+
         if statistic == 'win_rate':
             realized_returns = self.get('returns', data_type='realized',
                                         sampling_freq=self.cfg['returns']['sampling_freq'])
@@ -443,6 +499,8 @@ class SingleStockHMM(Model):
                                          sampling_freq=self.cfg['returns']['sampling_freq'])
 
             return self.information_coef(predicted_returns, realized_returns, print, **kwargs)
+        elif statistic == 'jitter':
+            return self.jitter(print)
 
     def show_results(self):
         pass
@@ -463,8 +521,9 @@ if __name__ == '__main__':
     simulator = cp.MarketSimulator(returns, costs=[simulated_tcost, simulated_hcost],
                                    market_volumes=volumes, cash_key=ss_hmm_model.risk_free_symbol)
 
-    ss_hmm_model.predict(mode='t', preprocess=None)
+    ss_hmm_model.predict(mode='t', threshold=0.9, preprocess=None)
     ss_hmm_model.prediction_quality(statistic='information_coefficient')
+    ss_hmm_model.prediction_quality(statistic='jitter')
 
     r_pred = ss_hmm_model.get('returns', 'predicted')
     conf_pred = ss_hmm_model.get('confidence', 'predicted')
