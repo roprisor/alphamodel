@@ -491,14 +491,14 @@ class SingleStockHMM(Model):
             predicted_returns = self.get('returns', data_type='predicted',
                                          sampling_freq=self.cfg['returns']['sampling_freq'])
 
-            return self.win_rate(predicted_returns, realized_returns, print, **kwargs)
+            return self.win_rate(predicted_returns, realized_returns, print=print, **kwargs)
         elif statistic == 'information_coefficient':
             realized_returns = self.get('returns', data_type='realized',
                                         sampling_freq=self.cfg['returns']['sampling_freq'])
             predicted_returns = self.get('returns', data_type='predicted',
                                          sampling_freq=self.cfg['returns']['sampling_freq'])
 
-            return self.information_coef(predicted_returns, realized_returns, print, **kwargs)
+            return self.information_coef(predicted_returns, realized_returns, print=print, **kwargs)
         elif statistic == 'jitter':
             return self.jitter(print)
 
@@ -522,8 +522,8 @@ if __name__ == '__main__':
                                    market_volumes=volumes, cash_key=ss_hmm_model.risk_free_symbol)
 
     ss_hmm_model.predict(mode='t', threshold=0.9, preprocess=None)
-    ss_hmm_model.prediction_quality(statistic='information_coefficient')
-    ss_hmm_model.prediction_quality(statistic='jitter')
+    ss_hmm_model.prediction_quality(statistic='information_coefficient', print=False)
+    ss_hmm_model.prediction_quality(statistic='jitter', print=False)
 
     r_pred = ss_hmm_model.get('returns', 'predicted')
     conf_pred = ss_hmm_model.get('confidence', 'predicted')
