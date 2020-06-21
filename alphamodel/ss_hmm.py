@@ -434,7 +434,8 @@ class SingleStockHMM(Model):
         Compute % of state jumps out of total periods
         """
         # Initialize data frame
-        jitter = pd.DataFrame()
+        jitter = pd.DataFrame(index=['mean_changes', 'regime_changes',
+                                     'mean_change_rate', 'regime_change_rate'])
 
         # Grab prediction since need to put into the context of the model
         returns_pred = self.get('returns', 'predicted')
@@ -442,28 +443,39 @@ class SingleStockHMM(Model):
 
         # For each symbol in the universe
         for symbol in self.universe:
-            transitions = 0
-            regime = 0
+            mean_changes = 0
+            regime_changes = 0
+            prev_regime = 0
+            prev_mean = 0
 
             # For each date in the period
             for date in date_model_store:
                 means = date_model_store[date][symbol].means_
-                high_return = means[0] if means[0] > means[1] else means[1]
-                chosen = returns_pred.loc[date, symbol]
+                high_mean = means[0] if means[0] > means[1] else means[1]
+                current_mean = returns_pred.loc[date, symbol]
 
-                # Did we choose the high return regime
-                if abs(high_return - chosen) < 1e-6:
-                    if regime == -1:
-                        transitions += 1
-                    regime = 1
-                else:
-                    if regime == 1:
-                        transitions += 1
-                    regime = -1
+                # Initialize prev_regime to the first period's regime once
+                if prev_regime == 0:
+                    prev_mean = current_mean
+                    prev_regime = 1 if abs(high_mean - current_mean) < 1e-6 else -1
 
-            jitter.loc[1, symbol] = transitions / len(date_model_store.keys())
-            logging.debug('jitter: Symbol {} had {} regime transitions in {} periods'.format(
-                symbol, transitions, len(date_model_store.keys())))
+                # Was there a mean change?
+                if abs(prev_mean - current_mean) > 1e-6:
+                    mean_changes += 1
+                    prev_mean = current_mean
+
+                    current_regime = 1 if abs(high_mean - current_mean) < 1e-6 else -1
+                    if current_regime != prev_regime:
+                        regime_changes += 1
+                        prev_regime = current_regime
+
+            jitter.loc['mean_change', symbol] = mean_changes
+            jitter.loc['mean_change_%', symbol] = mean_changes / len(date_model_store.keys())
+            jitter.loc['regime_change', symbol] = regime_changes
+            jitter.loc['regime_change_%', symbol] = regime_changes / len(date_model_store.keys())
+
+            logging.debug('jitter: Symbol {} had {} mean and {} regime changes in {} periods'.format(
+                symbol, mean_changes, regime_changes, len(date_model_store.keys())))
 
         # Compute statistics across all symbols
         jitter_all = jitter.agg(['mean', 'std'], axis=1).merge(jitter, left_index=True, right_index=True)
