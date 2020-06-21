@@ -435,7 +435,8 @@ class SingleStockHMM(Model):
         """
         # Initialize data frame
         jitter = pd.DataFrame(index=['mean_changes', 'regime_changes',
-                                     'mean_change_rate', 'regime_change_rate'])
+                                     'mean_change_rate', 'regime_change_rate',
+                                     'periods'])
 
         # Grab prediction since need to put into the context of the model
         returns_pred = self.get('returns', 'predicted')
@@ -469,10 +470,11 @@ class SingleStockHMM(Model):
                         regime_changes += 1
                         prev_regime = current_regime
 
-            jitter.loc['mean_change', symbol] = mean_changes
-            jitter.loc['mean_change_%', symbol] = mean_changes / len(date_model_store.keys())
-            jitter.loc['regime_change', symbol] = regime_changes
-            jitter.loc['regime_change_%', symbol] = regime_changes / len(date_model_store.keys())
+            jitter.loc['mean_changes', symbol] = mean_changes
+            jitter.loc['mean_change_rate', symbol] = mean_changes / len(date_model_store.keys())
+            jitter.loc['regime_changes', symbol] = regime_changes
+            jitter.loc['regime_change_rate', symbol] = regime_changes / len(date_model_store.keys())
+            jitter.loc['periods', symbol] = len(date_model_store.keys())
 
             logging.debug('jitter: Symbol {} had {} mean and {} regime changes in {} periods'.format(
                 symbol, mean_changes, regime_changes, len(date_model_store.keys())))
