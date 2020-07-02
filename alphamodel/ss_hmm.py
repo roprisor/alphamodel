@@ -110,15 +110,15 @@ class SingleStockHMM(Model):
                 if mode == 'e':
                     # Expected return & sigma
                     sym_return_pred.append(float(regime_model.means_.T.dot(state_proba[-1])))  # proba weighted mean
-                    sym_sigma_pred.append(float(regime_model.covars_.T.dot(state_proba[-1])))  # proba weighted sigma
+                    sym_sigma_pred.append(np.sqrt(float(regime_model.covars_.T.dot(state_proba[-1]))))  # proba weighted sigma
                 elif mode == 't':
                     # State return & sigma - if any current state passes threshold hurdle, use it
                     if state_proba[-1][0] > threshold:
                         sym_return_pred.append(float(regime_model.means_[0]))
-                        sym_sigma_pred.append(float(regime_model.covars_[0][0]))
+                        sym_sigma_pred.append(np.sqrt(float(regime_model.covars_[0][0])))
                     elif state_proba[-1][1] > threshold:
                         sym_return_pred.append(float(regime_model.means_[1]))
-                        sym_sigma_pred.append(float(regime_model.covars_[1][0]))
+                        sym_sigma_pred.append(np.sqrt(float(regime_model.covars_[1][0])))
                     # else default back to previous if available
                     else:
                         if sym_return_pred and sym_sigma_pred:
@@ -129,7 +129,7 @@ class SingleStockHMM(Model):
                             sym_return_pred.append(
                                 float(regime_model.means_.T.dot(state_proba[-1])))  # proba weighted mean
                             sym_sigma_pred.append(
-                                float(regime_model.covars_.T.dot(state_proba[-1])))  # proba weighted sigma
+                                np.sqrt(float(regime_model.covars_.T.dot(state_proba[-1]))))  # proba weighted sigma
                 else:
                     raise ValueError('mode: {} not supported, please check function def for allowed values'.
                                      format(mode))
@@ -179,8 +179,35 @@ class SingleStockHMM(Model):
         if 'covariance' not in self.cfg:
             raise NotImplemented('Covariance section needs to be defined under SS EWM model config.')
         elif self.cfg['covariance']['method'] == 'SS':
-            self.set('covariance', realized_returns.ewm(halflife=halflife, min_periods=10).cov().
-                     shift(realized_returns.shape[1]).dropna(), 'predicted', self.cfg['covariance']['sampling_freq'])
+            # self.set('covariance', realized_returns.ewm(halflife=halflife, min_periods=10).cov().
+            #         shift(realized_returns.shape[1]).dropna(), 'predicted', self.cfg['covariance']['sampling_freq'])
+
+            # Incorporate knowledge of regimes in the covariance
+            # cov = diag(arr regime stdev) * corr * diag(arr regime stdev)
+
+            # Correlation comes directly from historical data
+            corr = realized_returns.ewm(halflife=halflife, min_periods=10).corr().shift(realized_returns.shape[1]).\
+                dropna()
+
+            # Variances come from HMM
+            cov = pd.DataFrame()
+            prev_sigmas = sigmas_pred.iloc[0, :].values
+            for day in test_set.index:
+                # Construct the covariance for this date
+                try:
+                    t_sigma = cp.utils.time_locator(sigmas_pred, day)
+                    t_cov = pd.DataFrame(np.diag(t_sigma.values)@corr.loc[day, :].values@np.diag(t_sigma.values),
+                                         index=pd.MultiIndex.from_product(([day], self._universe)),
+                                         columns=self._universe)
+                    cov = pd.concat([cov, t_cov])
+                except KeyError as e:
+                    logging.debug('predict: Day index {} not found, defaulting to previous period variances'.
+                                  format(str(day)))
+                    cov.loc[day, :] = np.diag(prev_sigmas)@corr.loc[day, :]@np.diag(prev_sigmas)
+                # Reset prev_sigmas
+                prev_sigmas = sigmas_pred.loc[day, :].values
+
+            self.set('covariance', cov, 'predicted', self.cfg['covariance']['sampling_freq'])
         elif self.cfg['covariance']['method'] == 'FF5':
             # Fetch data
             ff_returns = self.get('ff_returns', 'realized', SamplingFrequency.DAY)
@@ -235,7 +262,7 @@ class SingleStockHMM(Model):
                 # Stock idiosyncratic variances - HMM variance; if not avail, then stock var minus FF var, ensure >=0
                 try:
                     t_sigma = cp.utils.time_locator(sigmas_pred, day)
-                    idyos[day] = t_sigma
+                    idyos[day] = t_sigma ** 2
                 except KeyError as e:
                     logging.debug('predict: Day index {} not found, defaulting to factor residual idyo variance'.
                                   format(str(day)))
@@ -243,7 +270,7 @@ class SingleStockHMM(Model):
                                                    exposures[day].values @ factor_sigma[day].values @ exposures[
                                                        day].values.T),
                                            index=realized_returns.columns).fillna(method='ffill')
-                idyos[day].loc[idyos[day] < 0] = 0
+                idyos[day][idyos[day] < 0] = 0
 
             self.set('factor_sigma', pd.concat(factor_sigma.values(), axis=0, keys=factor_sigma.keys()), 'predicted')
             self.set('exposures', pd.concat(exposures.values(), axis=0, keys=exposures.keys()), 'predicted')
@@ -535,7 +562,7 @@ if __name__ == '__main__':
     simulator = cp.MarketSimulator(returns, costs=[simulated_tcost, simulated_hcost],
                                    market_volumes=volumes, cash_key=ss_hmm_model.risk_free_symbol)
 
-    ss_hmm_model.predict(mode='t', threshold=0.9, preprocess=None)
+    ss_hmm_model.predict(mode='t', threshold=0.975, preprocess=None)
     ss_hmm_model.prediction_quality(statistic='information_coefficient', print=False)
     ss_hmm_model.prediction_quality(statistic='jitter', print=False)
 
