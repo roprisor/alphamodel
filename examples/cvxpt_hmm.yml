@@ -24,6 +24,6 @@ alpha:
     returns:
       sampling_freq: daily
     covariance:
-      method: FF5
+      method: SS
       sampling_freq: monthly
       train_days: 90

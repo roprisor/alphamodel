@@ -18,7 +18,8 @@ __all__ = ['SingleStockBLHMM']
 
 class SingleStockBLHMM(SingleStockHMM):
 
-    def predict(self, mode='e', threshold=0.8, w_market_cap_init=None, risk_aversion=2, c=0.75, **kwargs):
+    def predict(self, mode='e', threshold=0.8, w_market_cap_init=None, risk_aversion=2,
+                P_view=np.array(), Q_view=np.array(), c=0.75, **kwargs):
         """
         Prediction function for model, for out of sample historical test set
 
@@ -27,6 +28,8 @@ class SingleStockBLHMM(SingleStockHMM):
         :param threshold: probability threshold for state to be fully selected
         :param w_market_cap_init: market cap weights at beginning of training period
         :param risk_aversion: delta (δ) - risk aversion parameter (scalar)
+        :param P_view: KxN matrix for views (P * miu = Q + Epsilon)
+        :param Q_view: K vector of view constants
         :param c: certainty weight (in investor views) (scalar)
                 0: complete certainty, use only investor views
                 1: complete uncertainty, ignore investor views
@@ -84,7 +87,8 @@ class SingleStockBLHMM(SingleStockHMM):
 
         # Compute the BL posterior returns & covariance once the HMM views are incorporated
         conf_pred = self.get('confidence', 'predicted')
-        r_expected, sigma_expected = self.black_litterman_posterior_r_sigma(r_equilibrium, r_pred, conf_pred,
+        r_expected, sigma_expected = self.black_litterman_posterior_r_sigma(P_view, Q_view,
+                                                                            r_equilibrium, r_pred, conf_pred,
                                                                             c, sigma)
 
         # Save down the returns & covariances
@@ -192,10 +196,12 @@ class SingleStockBLHMM(SingleStockHMM):
         return Scenario(dt, horizon, returns, volumes, sigmas)
 
     @staticmethod
-    def black_litterman_posterior_r_sigma(r_eq, r_investor, conf_investor, c, Sigma):
+    def black_litterman_posterior_r_sigma(P_view, Q_view, r_eq, r_investor, conf_investor, c, Sigma):
         """
         Incorporates view return into equilibrium returns for the Black Litterman model
 
+        :param P_view: KxN matrix for views (P * miu = Q + Epsilon)
+        :param Q_view: K vector of view constants
         :param r_eq: equilibrium returns (priors)
         :param r_investor: predicted returns (investor views)
         :param conf_investor: confidence in predicted returns (investor views)
@@ -224,13 +230,19 @@ class SingleStockBLHMM(SingleStockHMM):
 
         # Generate posterior returns and sigma based on predictions and confidences
         for index, row in r_investor.iterrows():
+            # Gather variables
             tau = (1/(1-c)) - 1  # Meucci - Risk and Asset Allocation, chapter 9.2
-            Q = row.values
-            P = np.eye(len(Q))
+            P = P_view
+            Q = Q_view
+
+            # If the confidence are constant scalars then use them directly, else use as is
             if type(conf_investor) in [int, float]:
                 Omega = np.diag([conf_investor] * len(Q))
+            elif type(conf_investor) in [list, set]:
+                Omega = np.diag([conf_investor])
             else:
-                Omega = (np.eye(len(Q)) - np.diag(conf_investor.loc[index].values)) * abs(Q)
+                raise NotImplemented('black_litterman_posterior_r_sigma: variable confidence not ready.')
+                # Omega = (np.eye(len(Q)) - np.diag(conf_investor.loc[index].values)) * abs(Q)
 
             try:
                 t_r_eq = cp.utils.time_locator(r_eq, index, True)
