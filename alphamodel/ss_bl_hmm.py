@@ -275,6 +275,7 @@ if __name__ == '__main__':
     bl_hmm_model = SingleStockBLHMM('../examples/cvxpt_hmm.yml')
 
     # Training
+    logging.basicConfig(level=logging.INFO)
     logging.warning('Fetching training data...')
     bl_hmm_model.train(force=False)
 
@@ -294,7 +295,7 @@ if __name__ == '__main__':
     bl_hmm_model.predict(threshold=0.975,
                          w_market_cap_init=pd.Series(index=['SPY', 'EWJ', 'EWG', 'USDOLLAR'],
                                                      data=[0.65, 0.2, 0.15, 0]),
-                         P_view=np.array([1, 0, -1]), Q_view=np.array([0.05/252]),
+                         P_view=np.array([[1, 0, -1, 0], [1, -1, 0, 0]]), Q_view=np.array([0.05/252, 0.025/252]),
                          view_noise=0.005/252)
     bl_hmm_model.prediction_quality()
 
