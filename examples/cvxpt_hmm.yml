@@ -14,7 +14,7 @@ alpha:
     api_key: 6XyApK2BBj_MraQg2TMD
   model:
     start_date: '19970102'
-    end_date: '20011231'
+    end_date: '20021231'
     data_dir: '../data/'
     min_periods: 3
     halflife: 20

@@ -19,7 +19,7 @@ __all__ = ['SingleStockBLHMM']
 class SingleStockBLHMM(SingleStockHMM):
 
     def predict(self, mode='e', threshold=0.8, w_market_cap_init=None, risk_aversion=2,
-                P_view=np.array(), Q_view=np.array(), c=0.75, **kwargs):
+                P_view=np.array([]), Q_view=np.array([]), c=0.75, **kwargs):
         """
         Prediction function for model, for out of sample historical test set
 
@@ -88,7 +88,7 @@ class SingleStockBLHMM(SingleStockHMM):
         # Compute the BL posterior returns & covariance once the HMM views are incorporated
         conf_pred = self.get('confidence', 'predicted')
         r_expected, sigma_expected = self.black_litterman_posterior_r_sigma(P_view, Q_view,
-                                                                            r_equilibrium, r_pred, conf_pred,
+                                                                            r_equilibrium, r_pred, (1-c)*Q_view,
                                                                             c, sigma)
 
         # Save down the returns & covariances
@@ -196,7 +196,7 @@ class SingleStockBLHMM(SingleStockHMM):
         return Scenario(dt, horizon, returns, volumes, sigmas)
 
     @staticmethod
-    def black_litterman_posterior_r_sigma(P_view, Q_view, r_eq, r_investor, conf_investor, c, Sigma):
+    def black_litterman_posterior_r_sigma(P_view, Q_view, r_eq, r_investor, view_noise, c, Sigma):
         """
         Incorporates view return into equilibrium returns for the Black Litterman model
 
@@ -204,7 +204,7 @@ class SingleStockBLHMM(SingleStockHMM):
         :param Q_view: K vector of view constants
         :param r_eq: equilibrium returns (priors)
         :param r_investor: predicted returns (investor views)
-        :param conf_investor: confidence in predicted returns (investor views)
+        :param view_noise: noise in predicted returns (investor views)
         :param c: certainty weight (in investor views) (scalar)
                1: complete certainty, use only investor views
                0: complete uncertainty, ignore investor views
@@ -236,10 +236,10 @@ class SingleStockBLHMM(SingleStockHMM):
             Q = Q_view
 
             # If the confidence are constant scalars then use them directly, else use as is
-            if type(conf_investor) in [int, float]:
-                Omega = np.diag([conf_investor] * len(Q))
-            elif type(conf_investor) in [list, set]:
-                Omega = np.diag([conf_investor])
+            if type(view_noise) in [int, float]:
+                Omega = np.diag([view_noise] * len(Q))
+            elif type(view_noise) in [list, set, np.ndarray]:
+                Omega = np.diag([view_noise])
             else:
                 raise NotImplemented('black_litterman_posterior_r_sigma: variable confidence not ready.')
                 # Omega = (np.eye(len(Q)) - np.diag(conf_investor.loc[index].values)) * abs(Q)
@@ -271,7 +271,11 @@ class SingleStockBLHMM(SingleStockHMM):
 
 
 if __name__ == '__main__':
+    # Initialize model
     bl_hmm_model = SingleStockBLHMM('../examples/cvxpt_hmm.yml')
+
+    # Training
+    logging.warning('Fetching training data...')
     bl_hmm_model.train(force=False)
 
     # Realized Data for Simulation
@@ -285,8 +289,13 @@ if __name__ == '__main__':
     simulator = cp.MarketSimulator(returns, costs=[simulated_tcost, simulated_hcost],
                                    market_volumes=volumes, cash_key=bl_hmm_model.risk_free_symbol)
 
-    bl_hmm_model.predict(w_market_cap_init=pd.Series(index=['SPY', 'EWJ', 'EWG', 'USDOLLAR'],
-                                                     data=[0.65, 0.2, 0.15, 0]))
+    # Prediction
+    logging.warning('Running return prediction...')
+    bl_hmm_model.predict(threshold=0.975,
+                         w_market_cap_init=pd.Series(index=['SPY', 'EWJ', 'EWG', 'USDOLLAR'],
+                                                     data=[0.65, 0.2, 0.15, 0]),
+                         P_view=np.array([1, 0, -1]), Q_view=np.array([0.05/252]),
+                         view_noise=0.005/252)
     bl_hmm_model.prediction_quality()
 
     r_pred = bl_hmm_model.get('returns', 'predicted')
@@ -319,8 +328,7 @@ if __name__ == '__main__':
     else:
         raise NotImplemented('The %s risk model is not implemented yet'.format(bl_hmm_model.cfg['risk']))
 
-    logging.basicConfig(level=logging.INFO)
-
+    logging.warning('Running simulation...')
     # Optimization parameters
     gamma_risk, gamma_trade, gamma_hold = 5., 15., 1.
     leverage_limit = cp.LeverageLimit(1)
