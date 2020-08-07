@@ -19,7 +19,7 @@ __all__ = ['SingleStockBLHMM']
 class SingleStockBLHMM(SingleStockHMM):
 
     def predict(self, mode='e', threshold=0.8, w_market_cap_init=None, risk_aversion=2,
-                P_view=np.array([]), Q_view=np.array([]), c=0.75, **kwargs):
+                P_view=np.array([]), Q_view=np.array([]), noise_mode='pass_through', c=0.75, **kwargs):
         """
         Prediction function for model, for out of sample historical test set
 
@@ -30,6 +30,9 @@ class SingleStockBLHMM(SingleStockHMM):
         :param risk_aversion: delta (δ) - risk aversion parameter (scalar)
         :param P_view: KxN matrix for views (P * miu = Q + Epsilon)
         :param Q_view: K vector of view constants
+        :param noise_mode:
+                pass_through: direct
+                diag: diagonalize
         :param c: certainty weight (in investor views) (scalar)
                 0: complete certainty, use only investor views
                 1: complete uncertainty, ignore investor views
@@ -89,7 +92,7 @@ class SingleStockBLHMM(SingleStockHMM):
         conf_pred = self.get('confidence', 'predicted')
         r_expected, sigma_expected = self.black_litterman_posterior_r_sigma(P_view, Q_view,
                                                                             r_equilibrium, r_pred, (1-c)*Q_view,
-                                                                            c, sigma)
+                                                                            noise_mode, c, sigma)
 
         # Save down the returns & covariances
         # Save the old into _raw then overwrite the old
@@ -196,7 +199,7 @@ class SingleStockBLHMM(SingleStockHMM):
         return Scenario(dt, horizon, returns, volumes, sigmas)
 
     @staticmethod
-    def black_litterman_posterior_r_sigma(P_view, Q_view, r_eq, r_investor, view_noise, c, Sigma):
+    def black_litterman_posterior_r_sigma(P_view, Q_view, r_eq, r_investor, view_noise, noise_mode, c, Sigma):
         """
         Incorporates view return into equilibrium returns for the Black Litterman model
 
@@ -205,6 +208,9 @@ class SingleStockBLHMM(SingleStockHMM):
         :param r_eq: equilibrium returns (priors)
         :param r_investor: predicted returns (investor views)
         :param view_noise: noise in predicted returns (investor views)
+        :param noise_mode:
+                pass_through: direct
+                diag: diagonalize
         :param c: certainty weight (in investor views) (scalar)
                1: complete certainty, use only investor views
                0: complete uncertainty, ignore investor views
@@ -235,13 +241,15 @@ class SingleStockBLHMM(SingleStockHMM):
             P = P_view
             Q = Q_view
 
-            # If the confidence are constant scalars then use them directly, else use as is
-            if type(view_noise) in [int, float]:
-                Omega = np.diag([view_noise] * len(Q))
-            elif type(view_noise) in [list, set, np.ndarray]:
+            # If the confidence are constant scalars then expand and use them directly, else use as is
+            # Go by shape to determine this
+            if noise_mode == 'pass_through':
+                Omega = view_noise
+            elif noise_mode == 'diag':
                 Omega = np.diag([view_noise])
             else:
-                raise NotImplemented('black_litterman_posterior_r_sigma: variable confidence not ready.')
+                raise NotImplementedError('black_litterman_posterior_r_sigma: support only for `pass_through` and '
+                                          '`diag` modes.')
                 # Omega = (np.eye(len(Q)) - np.diag(conf_investor.loc[index].values)) * abs(Q)
 
             try:
@@ -250,16 +258,29 @@ class SingleStockBLHMM(SingleStockHMM):
             except KeyError as e:
                 logging.debug('black_litterman_posterior_r_sigma: Missing a value for index {}, keeping current: {}'.
                               format(str(index), str(e)))
+
+            # Pre-compute some values
+            view_var_term = tau * np.dot(np.dot(P, t_sigma), P.T) + Omega
+            if view_var_term.size == 1:
+                inverse_view_var_term = 1 / view_var_term
+            else:
+                inverse_view_var_term = np.linalg.inv(tau * np.dot(np.dot(P, t_sigma), P.T) + Omega)
+
+            # Posterior return & covariance calculations
             r_posterior[index] = t_r_eq + np.dot(
-                np.dot(tau * np.dot(t_sigma, P.T), np.linalg.inv(tau * np.dot(np.dot(P, t_sigma), P.T) + Omega)),
-                (Q - np.dot(P, t_r_eq)))
+                    np.dot(tau * np.dot(t_sigma, P.T),
+                           inverse_view_var_term),
+                    (Q - np.dot(P, t_r_eq))
+                )
             sigma_posterior_candidate = t_sigma + tau * t_sigma - tau * np.dot(
-                np.dot(np.dot(t_sigma, P.T), np.linalg.inv(tau * np.dot(np.dot(P, t_sigma), P.T) + Omega)),
-                tau * np.dot(P, t_sigma))
+                    np.dot(np.dot(t_sigma, P.T),
+                           inverse_view_var_term),
+                    tau * np.dot(P, t_sigma)
+                )
             sigma_posterior[index] = sigma_posterior_candidate if is_pd(sigma_posterior_candidate) else nearest_pd(
                 sigma_posterior_candidate)
 
-        # Convert dict to DataFrame
+        # Convert posterior dict to DataFrame
         r_posterior_df = pd.DataFrame.from_dict(r_posterior, orient='index')
         r_posterior_df.columns = r_investor.columns
 
@@ -295,7 +316,7 @@ if __name__ == '__main__':
     bl_hmm_model.predict(threshold=0.975,
                          w_market_cap_init=pd.Series(index=['SPY', 'EWJ', 'EWG', 'USDOLLAR'],
                                                      data=[0.65, 0.2, 0.15, 0]),
-                         P_view=np.array([[1, 0, -1, 0], [1, -1, 0, 0]]), Q_view=np.array([0.05/252, 0.025/252]),
+                         P_view=np.array([1, 0, -1, 0]), Q_view=np.array(0.05/252),
                          view_noise=0.005/252)
     bl_hmm_model.prediction_quality()
 
