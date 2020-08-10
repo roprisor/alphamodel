@@ -110,8 +110,7 @@ for conf in confidence:
             try:
                 # Predict and gather metrics
                 # US underperforms Germany 4% per year - correct view
-                ss.predict(mode='t', threshold=0.975, preprocess=None,
-                           w_market_cap_init=w_mktcap, risk_aversion=risk_av, c=conf,
+                ss.predict(w_market_cap_init=w_mktcap, risk_aversion=risk_av, c=conf,
                            P_view=np.array([-1, 0, 0, 1, 0, 0, 0, 0, 0, 0]), Q_view=np.array(0.04 / 252),
                            view_noise=0.005 / 252
                            )
