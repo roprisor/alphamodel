@@ -13,7 +13,7 @@ import time
 import cvxportfolio as cp
 import alphamodel as am
 
-config = {'name': 'bl_sim',
+config = {'name': 'bl_sim_incor',
           'universe':
               {'list': ['SPY', 'EWA', 'EWC', 'EWG', 'EWH', 'EWJ', 'EWS', 'EWU', 'EWW'],
                'ticker_col': 'Symbol',
@@ -82,12 +82,13 @@ w_mktcap['USDOLLAR'] = 0.
 start_date = dt.datetime.strptime(config['model']['start_date'], '%Y%m%d') + \
                 dt.timedelta(days=config['model']['train_len']*1.75)
 end_date = dt.datetime.strptime(config['model']['end_date'], '%Y%m%d')
-
+logging.warning('Start Date: {sd} - End Date: {ed}'.format(sd=start_date.strftime('%Y%m%d'),
+                                                           ed=end_date.strftime('%Y%m%d')))
 
 # Hyperparameters:
-# - confidence: return prediction, 'e' (expectation), 't' (regime over probability threshold)
-# - risk_aversion: raw data or exponential decay
-# - turnover: length of training data
+# - confidence: confidence in BL views
+# - risk_aversion: investor degree of aversion to risk
+# - turnover: how much of portfolio is allowed to be traded between each period
 
 # Search parameters
 confidence = np.arange(0, 1.1, 0.1)
@@ -108,9 +109,10 @@ for conf in confidence:
 
             try:
                 # Predict and gather metrics
+                # US outperforms Germany 4% per year - incorrect view
                 ss.predict(mode='t', threshold=0.975, preprocess=None,
                            w_market_cap_init=w_mktcap, risk_aversion=risk_av, c=conf,
-                           P_view=np.array([1, 0, -1, 0, 0, 0, 0, 0, 0, 0]), Q_view=np.array(0.05 / 252),
+                           P_view=np.array([1, 0, 0, -1, 0, 0, 0, 0, 0, 0]), Q_view=np.array(0.04 / 252),
                            view_noise=0.005 / 252
                            )
 
