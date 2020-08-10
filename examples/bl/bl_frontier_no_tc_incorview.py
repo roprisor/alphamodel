@@ -101,9 +101,9 @@ run = 1
 
 for conf in confidence:
     for risk_av in risk_aversion:
-        for turnover in turnover:
+        for trnv in turnover:
             # New run key
-            key = 'c' + str(conf) + '_ra' + str(risk_av) + '_trn' + str(turnover)
+            key = 'c' + str(conf) + '_ra' + str(risk_av) + '_trn' + str(trnv)
             logging.warning('Running for hyperparams {}'.format(key))
             start_time = time.time()
 
@@ -137,7 +137,7 @@ for conf in confidence:
                 logging.warning('Running backtest')
                 blu_policy = cp.BlackLittermanSPOpt(r_posterior=r_pred, sigma_posterior=covariance_pred,
                                                     delta=risk_av,
-                                                    target_turnover=turnover,
+                                                    target_turnover=trnv,
                                                     trading_freq='day')
 
                 # Backtest
