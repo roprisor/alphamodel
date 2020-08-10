@@ -9,24 +9,21 @@ import pandas as pd
 
 from .model import ModelState
 from .scenario import Scenario
-from .ss_hmm import SingleStockHMM
+from .ss_ewm import SingleStockEWM
 from .utils import is_pd, nearest_pd
 from datetime import timedelta, datetime
 
-__all__ = ['SingleStockBLHMM']
+__all__ = ['SingleStockBLEWM']
 
 
-class SingleStockBLHMM(SingleStockHMM):
+class SingleStockBLEWM(SingleStockEWM):
 
-    def predict(self, mode='e', threshold=0.8, w_market_cap_init=None, risk_aversion=2,
+    def predict(self, w_market_cap_init=None, risk_aversion=2,
                 P_view=np.array([]), Q_view=np.array([]),
                 view_noise=np.array([]), noise_mode='pass_through', c=0.75, **kwargs):
         """
         Prediction function for model, for out of sample historical test set
 
-        :param mode:    e = expected return & sigma (probability weighted)
-                        t = state with probability over threshold return & sigma
-        :param threshold: probability threshold for state to be fully selected
         :param w_market_cap_init: market cap weights at beginning of training period
         :param risk_aversion: delta (δ) - risk aversion parameter (scalar)
         :param P_view: KxN matrix for views (P * miu = Q + Epsilon)
@@ -43,7 +40,7 @@ class SingleStockBLHMM(SingleStockHMM):
         # Predict the underlying HMM returns/variances
         if self.state not in [ModelState.TRAINED, ModelState.PREDICTED]:
             raise ValueError('SingleStockBLHMM.predict: Can\'t predict if we haven\'t trained the model at least once.')
-        super().predict(mode, threshold, **kwargs)
+        super().predict(**kwargs)
 
         # We are not yet done predicting so reset the state for now
         self.__state = ModelState.TRAINED
@@ -51,7 +48,7 @@ class SingleStockBLHMM(SingleStockHMM):
         # Compute the market cap and equilibrium returns starting with the time 0 market cap weights
         # 1. Roll forward the market cap weights according to the realized returns for each asset
         if type(w_market_cap_init) not in [np.array, list, pd.Series]:
-            return ValueError('SingleStockBLHMM.predict: w_market_cap needs to be an array or a pandas Series.')
+            return ValueError('SingleStockEWM.predict: w_market_cap needs to be an array or a pandas Series.')
         r_realized = self.get('returns', 'realized').shift(1)
         r_realized.iloc[:, :] = r_realized.iloc[:, :] + 1
         raw_weights = np.multiply(r_realized.cumprod().values, w_market_cap_init.values.T)
@@ -91,15 +88,14 @@ class SingleStockBLHMM(SingleStockHMM):
                                                                        columns=r_pred.columns)])
 
         # Compute the BL posterior returns & covariance once the HMM views are incorporated
-        conf_pred = self.get('confidence', 'predicted')
         r_expected, sigma_expected = self.black_litterman_posterior_r_sigma(P_view, Q_view,
                                                                             r_equilibrium, r_pred, (1-c)*Q_view,
                                                                             noise_mode, c, sigma)
 
         # Save down the returns & covariances
         # Save the old into _raw then overwrite the old
-        self.set('returns_hmm', r_pred, 'predicted')
-        self.set('covariance_hmm', sigma, 'predicted')
+        self.set('returns_ewm', r_pred, 'predicted')
+        self.set('covariance_ewm', sigma, 'predicted')
         self.set('w_market_cap', w_market_cap, 'realized')
         self.set('r_equilibrium', r_equilibrium, 'predicted')
 
@@ -295,44 +291,42 @@ class SingleStockBLHMM(SingleStockHMM):
 
 if __name__ == '__main__':
     # Initialize model
-    bl_hmm_model = SingleStockBLHMM('../examples/cvxpt_hmm.yml')
+    bl_ewm_model = SingleStockBLEWM('../examples/cvxpt_hmm.yml')
 
     # Training
     logging.basicConfig(level=logging.INFO)
     logging.warning('Fetching training data...')
-    bl_hmm_model.train(force=False)
+    bl_ewm_model.train(force=False)
 
     # Realized Data for Simulation
-    prices = bl_hmm_model.get('prices', 'realized', bl_hmm_model.cfg['returns']['sampling_freq']).iloc[1:, :]
-    returns = bl_hmm_model.get('returns', 'realized', bl_hmm_model.cfg['returns']['sampling_freq'])
-    volumes = bl_hmm_model.get('volumes', 'realized', bl_hmm_model.cfg['returns']['sampling_freq'])
-    sigmas = bl_hmm_model.get('sigmas', 'realized', bl_hmm_model.cfg['returns']['sampling_freq'])
+    prices = bl_ewm_model.get('prices', 'realized', bl_ewm_model.cfg['returns']['sampling_freq']).iloc[1:, :]
+    returns = bl_ewm_model.get('returns', 'realized', bl_ewm_model.cfg['returns']['sampling_freq'])
+    volumes = bl_ewm_model.get('volumes', 'realized', bl_ewm_model.cfg['returns']['sampling_freq'])
+    sigmas = bl_ewm_model.get('sigmas', 'realized', bl_ewm_model.cfg['returns']['sampling_freq'])
 
     simulated_tcost = cp.TcostModel(half_spread=0.0005 / 2., nonlin_coeff=1., sigma=sigmas, volume=volumes)
     simulated_hcost = cp.HcostModel(borrow_costs=0.0001)
     simulator = cp.MarketSimulator(returns, costs=[simulated_tcost, simulated_hcost],
-                                   market_volumes=volumes, cash_key=bl_hmm_model.risk_free_symbol)
+                                   market_volumes=volumes, cash_key=bl_ewm_model.risk_free_symbol)
 
     # Prediction
     logging.warning('Running return prediction...')
-    bl_hmm_model.predict(threshold=0.975,
-                         w_market_cap_init=pd.Series(index=['SPY', 'EWJ', 'EWG', 'USDOLLAR'],
+    bl_ewm_model.predict(w_market_cap_init=pd.Series(index=['SPY', 'EWJ', 'EWG', 'USDOLLAR'],
                                                      data=[0.65, 0.2, 0.15, 0]),
                          P_view=np.array([1, 0, -1, 0]), Q_view=np.array(0.05/252),
                          view_noise=0.005/252)
-    bl_hmm_model.prediction_quality()
+    bl_ewm_model.prediction_quality()
 
-    r_pred = bl_hmm_model.get('returns', 'predicted')
-    conf_pred = bl_hmm_model.get('confidence', 'predicted')
-    volumes_pred = bl_hmm_model.get('volumes', 'predicted')
-    sigmas_pred = bl_hmm_model.get('sigmas', 'predicted')
+    r_pred = bl_ewm_model.get('returns', 'predicted')
+    volumes_pred = bl_ewm_model.get('volumes', 'predicted')
+    sigmas_pred = bl_ewm_model.get('sigmas', 'predicted')
 
-    bl_hmm_model.generate_forward_scenario(r_pred.index[100], 5)
+    bl_ewm_model.generate_forward_scenario(r_pred.index[100], 5)
 
     # Equilibrium results
-    start_date = datetime.strptime(bl_hmm_model.cfg['start_date'], '%Y%m%d') + \
-                 timedelta(days=bl_hmm_model.cfg['train_len'] * 1.75)
-    end_date = datetime.strptime(bl_hmm_model.cfg['end_date'], '%Y%m%d')
+    start_date = datetime.strptime(bl_ewm_model.cfg['start_date'], '%Y%m%d') + \
+                 timedelta(days=bl_ewm_model.cfg['train_len'] * 1.75)
+    end_date = datetime.strptime(bl_ewm_model.cfg['end_date'], '%Y%m%d')
 
     w_equal = pd.Series(index=r_pred.columns, data=[1] * len(r_pred.columns))
     w_equal.loc['USDOLLAR'] = 0.
@@ -343,14 +337,14 @@ if __name__ == '__main__':
                                        volume=volumes_pred)
     optimization_hcost=cp.HcostModel(borrow_costs=0.0001)
 
-    if bl_hmm_model.cfg['covariance']['method'] == 'SS':
-        spo_risk_model = cp.FullSigma(bl_hmm_model.get('covariance', 'predicted'))
-    elif bl_hmm_model.cfg['covariance']['method'] == 'FF5':
-        spo_risk_model = cp.FactorModelSigma(bl_hmm_model.get('exposures', 'predicted'),
-                                             bl_hmm_model.get('factor_sigma', 'predicted'),
-                                             bl_hmm_model.get('idyos', 'predicted'))
+    if bl_ewm_model.cfg['covariance']['method'] == 'SS':
+        spo_risk_model = cp.FullSigma(bl_ewm_model.get('covariance', 'predicted'))
+    elif bl_ewm_model.cfg['covariance']['method'] == 'FF5':
+        spo_risk_model = cp.FactorModelSigma(bl_ewm_model.get('exposures', 'predicted'),
+                                             bl_ewm_model.get('factor_sigma', 'predicted'),
+                                             bl_ewm_model.get('idyos', 'predicted'))
     else:
-        raise NotImplemented('The %s risk model is not implemented yet'.format(bl_hmm_model.cfg['risk']))
+        raise NotImplemented('The %s risk model is not implemented yet'.format(bl_ewm_model.cfg['risk']))
 
     logging.warning('Running simulation...')
     # Optimization parameters
@@ -361,7 +355,7 @@ if __name__ == '__main__':
     long_only = cp.LongOnly()
 
     # Optimization policy
-    c_mpc_policy = cp.ModelPredictiveControlScenarioOpt(alphamodel=bl_hmm_model, horizon=5, scenarios=5,
+    c_mpc_policy = cp.ModelPredictiveControlScenarioOpt(alphamodel=bl_ewm_model, horizon=5, scenarios=5,
                                                         scenario_mode='c', costs=[gamma_risk*spo_risk_model,
                                                                                   gamma_trade*optimization_tcost,
                                                                                   gamma_hold*optimization_hcost],

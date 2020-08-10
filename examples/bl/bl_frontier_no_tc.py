@@ -13,7 +13,7 @@ import time
 import cvxportfolio as cp
 import alphamodel as am
 
-config = {'name': 'bl_hmm_sim',
+config = {'name': 'bl_sim',
           'universe':
               {'list': ['SPY', 'EWA', 'EWC', 'EWG', 'EWH', 'EWJ', 'EWS', 'EWU', 'EWW'],
                'ticker_col': 'Symbol',
@@ -50,7 +50,7 @@ logging.warning('Running on {}'.format(host))
 # ### 1.2 Fetch return data
 
 # Fetch returns / volumes
-ss = am.SingleStockBLHMM(config)
+ss = am.SingleStockBLEWM(config)
 ss.train(force=True)
 
 # Realized Data for Simulation
@@ -92,7 +92,7 @@ end_date = dt.datetime.strptime(config['model']['end_date'], '%Y%m%d')
 # Search parameters
 confidence = np.arange(0, 1.1, 0.1)
 risk_aversion = [0.1, 1, 5, 10, 50]
-turnover = np.arange(0.025, 0.25, 0.025)
+turnover = np.arange(0.05, 0.25, 0.05)
 total_runs = len(confidence) * len(risk_aversion) * len(turnover)
 
 prtf_vs_params = {}
@@ -106,50 +106,55 @@ for conf in confidence:
             logging.warning('Running for hyperparams {}'.format(key))
             start_time = time.time()
 
-            # Predict and gather metrics
-            ss.predict(mode='t', threshold=0.975, preprocess=None,
-                       w_market_cap_init=w_mktcap, risk_aversion=risk_av, c=conf,
-                       P_view=np.array([1, 0, -1, 0, 0, 0, 0, 0, 0, 0]), Q_view=np.array(0.05 / 252),
-                       view_noise=0.005 / 252
-                       )
+            try:
+                # Predict and gather metrics
+                ss.predict(mode='t', threshold=0.975, preprocess=None,
+                           w_market_cap_init=w_mktcap, risk_aversion=risk_av, c=conf,
+                           P_view=np.array([1, 0, -1, 0, 0, 0, 0, 0, 0, 0]), Q_view=np.array(0.05 / 252),
+                           view_noise=0.005 / 252
+                           )
 
-            logging.warning('Prediction complete')
+                logging.warning('Prediction complete')
 
-            # Black Litterman output (HMM views included)
-            r_pred = ss.get('returns', 'predicted')
-            covariance_pred = ss.get('covariance', 'predicted')
-            conf_pred = ss.get('confidence', 'predicted')
-            volumes_pred = ss.get('volumes', 'predicted')
-            sigmas_pred = ss.get('sigmas', 'predicted')
+                # Black Litterman output (HMM views included)
+                r_pred = ss.get('returns', 'predicted')
+                covariance_pred = ss.get('covariance', 'predicted')
+                conf_pred = ss.get('confidence', 'predicted')
+                volumes_pred = ss.get('volumes', 'predicted')
+                sigmas_pred = ss.get('sigmas', 'predicted')
 
-            # Predicted costs
-            optimization_tcost = cp.TcostModel(half_spread=0.0005/2., nonlin_coeff=1.,
-                                               sigma=sigmas_pred, volume=volumes_pred)
-            optimization_hcost=cp.HcostModel(borrow_costs=0.0001)
+                # Predicted costs
+                optimization_tcost = cp.TcostModel(half_spread=0.0005/2., nonlin_coeff=1.,
+                                                   sigma=sigmas_pred, volume=volumes_pred)
+                optimization_hcost=cp.HcostModel(borrow_costs=0.0001)
 
-            # Covariance setup
-            bl_risk_model = cp.FullSigma(covariance_pred)
+                # Covariance setup
+                bl_risk_model = cp.FullSigma(covariance_pred)
 
-            # Black Litterman policy
-            logging.warning('Running backtest')
-            blu_policy = cp.BlackLittermanSPOpt(r_posterior=r_pred, sigma_posterior=covariance_pred,
-                                                delta=risk_av,
-                                                target_turnover=turnover,
-                                                trading_freq='day')
+                # Black Litterman policy
+                logging.warning('Running backtest')
+                blu_policy = cp.BlackLittermanSPOpt(r_posterior=r_pred, sigma_posterior=covariance_pred,
+                                                    delta=risk_av,
+                                                    target_turnover=turnover,
+                                                    trading_freq='day')
 
-            # Backtest
-            blu_results = simulator.run_multiple_backtest(1E6*w_mktcap, start_time=start_date,  end_time=end_date,
-                                                          policies=[blu_policy],
-                                                          loglevel=logging.WARNING, parallel=True)
-            result = blu_results[0]
-            logging.warning(result.summary())
+                # Backtest
+                blu_results = simulator.run_multiple_backtest(1E6*w_mktcap, start_time=start_date,  end_time=end_date,
+                                                              policies=[blu_policy],
+                                                              loglevel=logging.WARNING, parallel=True)
+                result = blu_results[0]
+                logging.warning(result.summary())
 
-            # Save down metrics together with parameters
-            prtf_vs_params[key] = [conf, risk_av, turnover,
-                                   result.excess_returns.mean() * 100 * result.ppy,
-                                   result.excess_returns.std() * 100 * np.sqrt(result.ppy),
-                                   result.max_drawdown * 100,
-                                   result.turnover.mean() * 100 * result.ppy]
+                # Save down metrics together with parameters
+                prtf_vs_params[key] = [conf, risk_av, turnover,
+                                       result.excess_returns.mean() * 100 * result.ppy,
+                                       result.excess_returns.std() * 100 * np.sqrt(result.ppy),
+                                       result.max_drawdown * 100,
+                                       result.turnover.mean() * 100 * result.ppy]
+            except Exception as e:
+                logging.error('Ran into an error: {e}'.format(e=e))
+                prtf_vs_params[key] = [conf, risk_av, turnover,
+                                       0, 0, 100, 0]
 
             # Save down values in .csv
             prtf_df = pd.DataFrame.from_dict(prtf_vs_params, orient='index')
@@ -160,7 +165,8 @@ for conf in confidence:
             # Print run stats and advance run
             end_time = time.time()
             logging.warning('Run #{run}/{runs} complete. Expected time of completion: {eta}'.format(
-                run=run, runs=total_runs, eta=dt.datetime.now() + dt.timedelta(seconds=end_time - start_time)
+                run=run, runs=total_runs, eta=dt.datetime.now() +
+                                              (total_runs - run) * dt.timedelta(seconds=end_time - start_time)
                 )
             )
-
+            run += 1
