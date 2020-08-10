@@ -120,7 +120,6 @@ for conf in confidence:
                 # Black Litterman output (HMM views included)
                 r_pred = ss.get('returns', 'predicted')
                 covariance_pred = ss.get('covariance', 'predicted')
-                conf_pred = ss.get('confidence', 'predicted')
                 volumes_pred = ss.get('volumes', 'predicted')
                 sigmas_pred = ss.get('sigmas', 'predicted')
 
@@ -147,21 +146,20 @@ for conf in confidence:
                 logging.warning(result.summary())
 
                 # Save down metrics together with parameters
-                prtf_vs_params[key] = [conf, risk_av, turnover,
+                prtf_vs_params[key] = [conf, risk_av, trnv,
                                        result.excess_returns.mean() * 100 * result.ppy,
                                        result.excess_returns.std() * 100 * np.sqrt(result.ppy),
                                        result.max_drawdown * 100,
                                        result.turnover.mean() * 100 * result.ppy]
             except Exception as e:
                 logging.error('Ran into an error: {e}'.format(e=e))
-                prtf_vs_params[key] = [conf, risk_av, turnover,
-                                       0, 0, 100, 0]
+                prtf_vs_params[key] = [conf, risk_av, trnv, 0, 0, 100, 0]
 
             # Save down values in .csv
             prtf_df = pd.DataFrame.from_dict(prtf_vs_params, orient='index')
             prtf_df.columns = ['confidence', 'risk_aversion', 'target_turnover', 'excess_return',
                                'excess_risk', 'max_drawdown', 'turnover']
-            prtf_df.to_csv(ss.cfg['data_dir'] + 'bl_hmm_no_tc_{}.csv'.format(host), index=False)
+            prtf_df.to_csv(ss.cfg['data_dir'] + 'bl_ewm_no_tc_corview_{}.csv'.format(host), index=False)
 
             # Print run stats and advance run
             end_time = time.time()
