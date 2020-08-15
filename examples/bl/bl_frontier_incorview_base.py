@@ -172,7 +172,7 @@ for vconf in view_confidence:
             prtf_df = pd.DataFrame.from_dict(prtf_vs_params, orient='index')
             prtf_df.columns = ['view_confidence', 'gamma)risk', 'gamma_trade',
                                'excess_return', 'excess_risk', 'max_drawdown', 'turnover']
-            prtf_df.to_csv(ss.cfg['data_dir'] + 'bl_ewm_corview_{}.csv'.format(host), index=False)
+            prtf_df.to_csv(ss.cfg['data_dir'] + 'bl_ewm_incorview_{}.csv'.format(host), index=False)
 
             # Print run stats and advance run
             end_time = time.time()
