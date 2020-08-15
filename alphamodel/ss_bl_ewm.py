@@ -80,7 +80,7 @@ class SingleStockBLEWM(SingleStockEWM):
             try:
                 t_sigma = cp.utils.time_locator(sigma, t, True)
             except KeyError as e:
-                logging.debug('SingleStockBLHMM.predict: Unable to find a new covariance for {}, using current: {}'.
+                logging.debug('SingleStockBLEWM.predict: Unable to find a new covariance for {}, using current: {}'.
                               format(str(t), str(e)))
             if t_sigma.size > 0:
                 t_r_eq = risk_aversion * t_sigma.dot(cp.utils.time_locator(w_market_cap, t, True))
@@ -314,7 +314,7 @@ if __name__ == '__main__':
     bl_ewm_model.predict(w_market_cap_init=pd.Series(index=['SPY', 'EWJ', 'EWG', 'USDOLLAR'],
                                                      data=[0.65, 0.2, 0.15, 0]),
                          P_view=np.array([1, 0, -1, 0]), Q_view=np.array(0.05/252),
-                         view_noise=0.005/252)
+                         view_noise=np.array(0.005/252))
     bl_ewm_model.prediction_quality()
 
     r_pred = bl_ewm_model.get('returns', 'predicted')

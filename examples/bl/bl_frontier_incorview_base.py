@@ -13,7 +13,7 @@ import time
 import cvxportfolio as cp
 import alphamodel as am
 
-config = {'name': 'bl_sim_cor',
+config = {'name': 'bl_sim_incor',
           'universe':
               {'list': ['SPY', 'EWA', 'EWC', 'EWG', 'EWH', 'EWJ', 'EWS', 'EWU', 'EWW'],
                'ticker_col': 'Symbol',
@@ -86,33 +86,36 @@ logging.warning('Start Date: {sd} - End Date: {ed}'.format(sd=start_date.strftim
                                                            ed=end_date.strftime('%Y%m%d')))
 
 # Hyperparameters:
-# - confidence: confidence in BL views
-# - risk_aversion: investor degree of aversion to risk
-# - turnover: how much of portfolio is allowed to be traded between each period
+# - view_confidence: confidence in BL view
+# - gamma_risk: risk weighting factor
+# - gamma_trade: trade cost weighting factor
 
 # Search parameters
-confidence = np.arange(0, 1.1, 0.1)
-risk_aversion = [0.1, 1, 5, 10, 50]
-turnover = np.arange(0.05, 0.25, 0.05)
-total_runs = len(confidence) * len(risk_aversion) * len(turnover)
+risk_aversion = 2.5
+confidence = 0.5
+view_confidence = np.arange(0.0, 1.0, 0.1)
+gamma_risk = [0.5, 1, 2.5, 10, 25, 100]
+gamma_trade = [0.5, 1, 2.5, 10, 25, 100]
+gamma_hold = 1
+total_runs = len(view_confidence) * len(gamma_risk) * len(gamma_trade)
 
 prtf_vs_params = {}
 run = 1
 
-for conf in confidence:
-    for risk_av in risk_aversion:
-        for trnv in turnover:
+for vconf in view_confidence:
+    for grisk in gamma_risk:
+        for gtrd in gamma_trade:
             # New run key
-            key = 'c' + str(conf) + '_ra' + str(risk_av) + '_trn' + str(trnv)
+            key = 'vconf' + str(vconf) + '_grisk' + str(grisk) + '_gtrd' + str(gtrd)
             logging.warning('Running for hyperparams {}'.format(key))
             start_time = time.time()
 
             try:
                 # Predict and gather metrics
-                # US underperforms Germany 4% per year - correct view
-                ss.predict(w_market_cap_init=w_mktcap, risk_aversion=risk_av, c=conf,
-                           P_view=np.array([-1, 0, 0, 1, 0, 0, 0, 0, 0, 0]), Q_view=np.array(0.04 / 252),
-                           view_noise=0.005 / 252
+                # US outperforms Germany 4% per year - incorrect view
+                ss.predict(w_market_cap_init=w_mktcap, risk_aversion=risk_aversion, c=confidence,
+                           P_view=np.array([1, 0, 0, -1, 0, 0, 0, 0, 0, 0]), Q_view=np.array(0.04 / 252),
+                           view_noise=(1 - vconf) * 2 * (0.04 / 252)
                            )
 
                 logging.warning('Prediction complete')
@@ -133,33 +136,43 @@ for conf in confidence:
 
                 # Black Litterman policy
                 logging.warning('Running backtest')
-                blu_policy = cp.BlackLittermanSPOpt(r_posterior=r_pred, sigma_posterior=covariance_pred,
-                                                    delta=risk_av,
-                                                    target_turnover=trnv,
-                                                    trading_freq='day')
+
+                # Optimization parameters
+                leverage_limit = cp.LeverageLimit(1)
+                # min_weight = cp.MinWeights(-0.5)
+                # max_weight = cp.MaxWeights(0.5)
+                long_only = cp.LongOnly()
+
+                # Optimization policy
+                bl_spo_policy = cp.SinglePeriodOpt(return_forecast=r_pred,
+                                                   costs=[grisk * bl_risk_model,
+                                                          gtrd * optimization_tcost,
+                                                          gamma_hold * optimization_hcost],
+                                                   constraints=[leverage_limit, long_only],
+                                                   trading_freq='day')
 
                 # Backtest
                 blu_results = simulator.run_multiple_backtest(1E6*w_mktcap, start_time=start_date,  end_time=end_date,
-                                                              policies=[blu_policy],
+                                                              policies=[bl_spo_policy],
                                                               loglevel=logging.WARNING, parallel=True)
                 result = blu_results[0]
                 logging.warning(result.summary())
 
                 # Save down metrics together with parameters
-                prtf_vs_params[key] = [conf, risk_av, trnv,
+                prtf_vs_params[key] = [vconf, grisk, gtrd,
                                        result.excess_returns.mean() * 100 * result.ppy,
                                        result.excess_returns.std() * 100 * np.sqrt(result.ppy),
                                        result.max_drawdown * 100,
                                        result.turnover.mean() * 100 * result.ppy]
             except Exception as e:
-                logging.error('Ran into an error: {e}'.format(e=e))
-                prtf_vs_params[key] = [conf, risk_av, trnv, 0, 0, 100, 0]
+                logging.error('Ran into an error: {e}'.format(e=str(e)))
+                prtf_vs_params[key] = [vconf, grisk, gtrd, 0, 0, 100, 0]
 
             # Save down values in .csv
             prtf_df = pd.DataFrame.from_dict(prtf_vs_params, orient='index')
-            prtf_df.columns = ['confidence', 'risk_aversion', 'target_turnover', 'excess_return',
-                               'excess_risk', 'max_drawdown', 'turnover']
-            prtf_df.to_csv(ss.cfg['data_dir'] + 'bl_ewm_no_tc_corview_{}.csv'.format(host), index=False)
+            prtf_df.columns = ['view_confidence', 'gamma)risk', 'gamma_trade',
+                               'excess_return', 'excess_risk', 'max_drawdown', 'turnover']
+            prtf_df.to_csv(ss.cfg['data_dir'] + 'bl_ewm_corview_{}.csv'.format(host), index=False)
 
             # Print run stats and advance run
             end_time = time.time()

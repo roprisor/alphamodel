@@ -217,9 +217,15 @@ class Model(metaclass=ABCMeta):
         Save all data in class
         :return: n/a
         """
-        f = open(self.filename, 'wb')
-        pickle.dump(self.__dict__, f, 2)
-        f.close()
+        try:
+            f = open(self.filename, 'wb')
+            pickle.dump(self.__dict__, f, 2)
+            f.close()
+        except Exception as e:
+            print('save: Unable to save pickle file, {e}'.format(e=str(e)))
+            return False
+
+        return True
 
     def load(self):
         """
