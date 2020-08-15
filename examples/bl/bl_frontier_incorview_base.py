@@ -92,10 +92,10 @@ logging.warning('Start Date: {sd} - End Date: {ed}'.format(sd=start_date.strftim
 
 # Search parameters
 risk_aversion = 2.5
-confidence = 0.5
+confidence = 0.75
 view_confidence = np.arange(0.0, 1.0, 0.1)
 gamma_risk = [2.5]
-gamma_trade = [2.5]
+gamma_trade = [1]
 gamma_hold = 1
 total_runs = len(view_confidence) * len(gamma_risk) * len(gamma_trade)
 

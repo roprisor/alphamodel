@@ -89,7 +89,7 @@ class SingleStockBLEWM(SingleStockEWM):
 
         # Compute the BL posterior returns & covariance once the HMM views are incorporated
         r_expected, sigma_expected = self.black_litterman_posterior_r_sigma(P_view, Q_view,
-                                                                            r_equilibrium, r_pred, (1-c)*Q_view,
+                                                                            r_equilibrium, r_pred, view_noise,
                                                                             noise_mode, c, sigma)
 
         # Save down the returns & covariances
