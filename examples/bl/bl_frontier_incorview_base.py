@@ -94,8 +94,8 @@ logging.warning('Start Date: {sd} - End Date: {ed}'.format(sd=start_date.strftim
 risk_aversion = 2.5
 confidence = 0.5
 view_confidence = np.arange(0.0, 1.0, 0.1)
-gamma_risk = [0.5, 1, 2.5, 10, 25, 100]
-gamma_trade = [0.5, 1, 2.5, 10, 25, 100]
+gamma_risk = [2.5]
+gamma_trade = [2.5]
 gamma_hold = 1
 total_runs = len(view_confidence) * len(gamma_risk) * len(gamma_trade)
 
@@ -149,7 +149,7 @@ for vconf in view_confidence:
                                                           gtrd * optimization_tcost,
                                                           gamma_hold * optimization_hcost],
                                                    constraints=[leverage_limit, long_only],
-                                                   trading_freq='day')
+                                                   trading_freq='year')
 
                 # Backtest
                 blu_results = simulator.run_multiple_backtest(1E6*w_mktcap, start_time=start_date,  end_time=end_date,
