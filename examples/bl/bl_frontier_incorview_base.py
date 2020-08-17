@@ -30,7 +30,7 @@ config = {'name': 'bl_sim_incor',
                'min_periods': 3,
                'hidden_states': 2,
                'train_len': 1700,
-               'data_dir': '/mnt/research_masc/data_store/hmm/',
+               'data_dir': '/mnt/research_masc/data_store/bl/',
                'returns':
                    {'sampling_freq': 'daily'},
                'covariance':
@@ -94,7 +94,7 @@ logging.warning('Start Date: {sd} - End Date: {ed}'.format(sd=start_date.strftim
 # Search parameters
 risk_aversion = 2.5
 confidence = 0.8
-view_confidence = np.arange(0.05, 1.05, 0.05)
+view_confidence = np.arange(0.0, 1.05, 0.05)
 gamma_risk = [0.1]
 gamma_trade = [0.1]
 gamma_hold = 0.
