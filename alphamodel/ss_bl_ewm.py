@@ -20,7 +20,9 @@ class SingleStockBLEWM(SingleStockEWM):
 
     def predict(self, w_market_cap_init=None, risk_aversion=2,
                 P_view=np.array([]), Q_view=np.array([]),
-                view_noise=np.array([]), noise_mode='pass_through', c=0.75, **kwargs):
+                Omega_view=np.array([]), view_confidence=0.75,
+                noise_mode='confidence',
+                c=0.75, **kwargs):
         """
         Prediction function for model, for out of sample historical test set
 
@@ -28,10 +30,11 @@ class SingleStockBLEWM(SingleStockEWM):
         :param risk_aversion: delta (δ) - risk aversion parameter (scalar)
         :param P_view: KxN matrix for views (P * miu = Q + Epsilon)
         :param Q_view: K vector of view constants
-        :param view_noise: K vector of view noise
+        :param Omega_view: K vector of view noise
+        :param view_confidence: confidence in view, will set uncertainty [0, 1)
         :param noise_mode:
-                pass_through: direct
-                diag: diagonalize
+                pass_through: direct pass of Omega_view as Omega
+                confidence: Walters - alpha * P * Sigma * P.T
         :param c: certainty weight (in investor views) (scalar)
                 0: complete certainty, use only investor views
                 1: complete uncertainty, ignore investor views
@@ -89,8 +92,11 @@ class SingleStockBLEWM(SingleStockEWM):
 
         # Compute the BL posterior returns & covariance once the HMM views are incorporated
         r_expected, sigma_expected = self.black_litterman_posterior_r_sigma(P_view, Q_view,
-                                                                            r_equilibrium, r_pred, view_noise,
-                                                                            noise_mode, c, sigma)
+                                                                            r_equilibrium, r_pred,
+                                                                            c, sigma,
+                                                                            O_view=Omega_view,
+                                                                            view_confidence=view_confidence,
+                                                                            noise_mode=noise_mode)
 
         # Save down the returns & covariances
         # Save the old into _raw then overwrite the old
@@ -197,7 +203,10 @@ class SingleStockBLEWM(SingleStockEWM):
         return Scenario(dt, horizon, returns, volumes, sigmas)
 
     @staticmethod
-    def black_litterman_posterior_r_sigma(P_view, Q_view, r_eq, r_investor, view_noise, noise_mode, c, Sigma):
+    def black_litterman_posterior_r_sigma(P_view, Q_view, r_eq, r_investor, c, Sigma,
+                                          noise_mode='confidence',
+                                          view_confidence=0.75,
+                                          O_view=np.array([])):
         """
         Incorporates view return into equilibrium returns for the Black Litterman model
 
@@ -205,7 +214,12 @@ class SingleStockBLEWM(SingleStockEWM):
         :param Q_view: K vector of view constants
         :param r_eq: equilibrium returns (priors)
         :param r_investor: predicted returns (investor views)
-        :param view_noise: noise in predicted returns (investor views)
+        :param O_view: noise covariance matrix
+        :param view_confidence: confidence in view, will set uncertainty [0, 1)
+        :param noise_mode:
+                pass_through: direct pass of Omega_view as Omega
+                confidence: Walters - alpha * P * Sigma * P.T
+        :param view_confidence: noise in predicted returns (investor views)
         :param noise_mode:
                 pass_through: direct
                 diag: diagonalize
@@ -239,23 +253,21 @@ class SingleStockBLEWM(SingleStockEWM):
             P = P_view
             Q = Q_view
 
-            # If the confidence are constant scalars then expand and use them directly, else use as is
-            # Go by shape to determine this
-            if noise_mode == 'pass_through':
-                Omega = view_noise
-            elif noise_mode == 'diag':
-                Omega = np.diag([view_noise])
-            else:
-                raise NotImplementedError('black_litterman_posterior_r_sigma: support only for `pass_through` and '
-                                          '`diag` modes.')
-                # Omega = (np.eye(len(Q)) - np.diag(conf_investor.loc[index].values)) * abs(Q)
-
             try:
                 t_r_eq = cp.utils.time_locator(r_eq, index, True)
                 t_sigma = cp.utils.time_locator(Sigma, index, True)
             except KeyError as e:
                 logging.debug('black_litterman_posterior_r_sigma: Missing a value for index {}, keeping current: {}'.
                               format(str(index), str(e)))
+
+            if noise_mode == 'pass_through':
+                Omega = O_view
+            elif noise_mode == 'confidence':
+                alpha = (1 - view_confidence) / view_confidence
+                Omega = alpha * np.dot(np.dot(P, t_sigma), P.T)
+            else:
+                raise NotImplementedError('black_litterman_posterior_r_sigma: support only for `pass_through` and '
+                                          '`confidence` modes.')
 
             # Pre-compute some values
             view_var_term = tau * np.dot(np.dot(P, t_sigma), P.T) + Omega
