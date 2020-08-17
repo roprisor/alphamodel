@@ -214,6 +214,8 @@ class SingleStockBLHMM(SingleStockHMM):
         """
         Incorporates view return into equilibrium returns for the Black Litterman model
 
+        Quick example: https://thefjg.blogspot.com/2017/12/black-litterman-portfolio-optimization.html
+
         :param P_view: KxN matrix for views (P * miu = Q + Epsilon)
         :param Q_view: K vector of view constants
         :param r_eq: equilibrium returns (priors)

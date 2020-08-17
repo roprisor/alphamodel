@@ -36,7 +36,7 @@ config = {'name': 'bl_sim_cor',
                'covariance':
                     {'method': 'SS',
                      'sampling_freq': 'monthly',
-                     'train_days': 90
+                     'train_days': 360
                      }
                }
           }
@@ -79,8 +79,9 @@ w_mktcap = pd.Series(index=market_stats.index, data=market_stats.loc[:, 'MarketC
 w_mktcap['USDOLLAR'] = 0.
 
 # Start and end date
-start_date = dt.datetime.strptime(config['model']['start_date'], '%Y%m%d') + \
-                dt.timedelta(days=config['model']['train_len']*1.75)
+# start_date = dt.datetime.strptime(config['model']['start_date'], '%Y%m%d') + \
+#                 dt.timedelta(days=config['model']['train_len']*1.75)
+start_date = dt.datetime(2005, 1, 2)
 end_date = dt.datetime.strptime(config['model']['end_date'], '%Y%m%d')
 logging.warning('Start Date: {sd} - End Date: {ed}'.format(sd=start_date.strftime('%Y%m%d'),
                                                            ed=end_date.strftime('%Y%m%d')))
@@ -92,11 +93,11 @@ logging.warning('Start Date: {sd} - End Date: {ed}'.format(sd=start_date.strftim
 
 # Search parameters
 risk_aversion = 2.5
-confidence = 0.75
-view_confidence = np.arange(0.0, 1.0, 0.1)
-gamma_risk = [2.5]
-gamma_trade = [1]
-gamma_hold = 1
+confidence = 0.8
+view_confidence = np.arange(0.05, 1.05, 0.05)
+gamma_risk = [0.1]
+gamma_trade = [0.1]
+gamma_hold = 0.
 total_runs = len(view_confidence) * len(gamma_risk) * len(gamma_trade)
 
 prtf_vs_params = {}
@@ -139,8 +140,7 @@ for vconf in view_confidence:
 
                 # Optimization parameters
                 leverage_limit = cp.LeverageLimit(1)
-                # min_weight = cp.MinWeights(-0.5)
-                # max_weight = cp.MaxWeights(0.5)
+                fully_invested = cp.ZeroCash()
                 long_only = cp.LongOnly()
 
                 # Optimization policy
@@ -148,8 +148,8 @@ for vconf in view_confidence:
                                                    costs=[grisk * bl_risk_model,
                                                           gtrd * optimization_tcost,
                                                           gamma_hold * optimization_hcost],
-                                                   constraints=[leverage_limit, long_only],
-                                                   trading_freq='year')
+                                                   constraints=[leverage_limit, fully_invested, long_only],
+                                                   trading_freq='once')
 
                 # Backtest
                 blu_results = simulator.run_multiple_backtest(1E6*w_mktcap, start_time=start_date,  end_time=end_date,
