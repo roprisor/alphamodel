@@ -6,6 +6,7 @@ import cvxportfolio as cp
 import logging
 import numpy as np
 import pandas as pd
+import scipy.stats as sts
 
 from .model import ModelState
 from .scenario import Scenario
@@ -22,7 +23,7 @@ class SingleStockBLHMM(SingleStockHMM):
                 w_market_cap_init = None, risk_aversion = 2,
                 P_view = np.array([]), Q_view = np.array([]),
                 Omega_view = np.array([]), view_confidence = 0.75,
-                noise_mode = 'confidence', c = 0.75, ** kwargs):
+                noise_mode = 'confidence_static', c = 0.75, ** kwargs):
         """
         Prediction function for model, for out of sample historical test set
 
@@ -37,7 +38,8 @@ class SingleStockBLHMM(SingleStockHMM):
         :param view_confidence: confidence in view, will set uncertainty [0, 1)
         :param noise_mode:
                 pass_through: direct pass of Omega_view as Omega
-                confidence: Walters - alpha * P * Sigma * P.T
+                confidence_static: Walters - alpha * P * Sigma * P.T
+                confidence_dynamic: CDF of Q_view within investor predicted view distribution
         :param c: certainty weight (in investor views) (scalar)
                 0: complete certainty, use only investor views
                 1: complete uncertainty, ignore investor views
@@ -94,13 +96,12 @@ class SingleStockBLHMM(SingleStockHMM):
                                                                        columns=r_pred.columns)])
 
         # Compute the BL posterior returns & covariance once the HMM views are incorporated
-        conf_pred = self.get('confidence', 'predicted')
-        r_expected, sigma_expected = self.black_litterman_posterior_r_sigma(P_view, Q_view,
-                                                                            r_equilibrium, r_pred,
-                                                                            c, sigma,
-                                                                            O_view=Omega_view,
-                                                                            view_confidence=view_confidence,
-                                                                            noise_mode=noise_mode)
+        r_expected, sigma_expected, conf_expected = self.black_litterman_posterior_r_sigma(P_view, Q_view,
+                                                                                           r_equilibrium, r_pred,
+                                                                                           c, sigma,
+                                                                                           O_view=Omega_view,
+                                                                                           view_confidence=view_confidence,
+                                                                                           noise_mode=noise_mode)
 
         # Save down the returns & covariances
         # Save the old into _raw then overwrite the old
@@ -111,6 +112,7 @@ class SingleStockBLHMM(SingleStockHMM):
 
         self.set('returns', r_expected, 'predicted')
         self.set('covariance', sigma_expected, 'predicted')
+        self.set('confidence', conf_expected, 'predicted')
 
         # We're now done so can call ourselves predicted
         self.__state = ModelState.PREDICTED
@@ -207,7 +209,7 @@ class SingleStockBLHMM(SingleStockHMM):
         return Scenario(dt, horizon, returns, volumes, sigmas)
 
     @staticmethod
-    def black_litterman_posterior_r_sigma(P_view, Q_view, r_eq, r_investor, c, Sigma,
+    def black_litterman_posterior_r_sigma(P_view, Q_view, r_eq, r_predicted, c, Sigma,
                                           noise_mode='confidence',
                                           view_confidence=0.75,
                                           O_view=np.array([])):
@@ -219,12 +221,13 @@ class SingleStockBLHMM(SingleStockHMM):
         :param P_view: KxN matrix for views (P * miu = Q + Epsilon)
         :param Q_view: K vector of view constants
         :param r_eq: equilibrium returns (priors)
-        :param r_investor: predicted returns (investor views)
+        :param r_predicted: predicted returns (investor views)
         :param O_view: noise covariance matrix
         :param view_confidence: confidence in view, will set uncertainty [0, 1)
         :param noise_mode:
                 pass_through: direct pass of Omega_view as Omega
-                confidence: Walters - alpha * P * Sigma * P.T
+                confidence_static: Walters - alpha * P * Sigma * P.T
+                confidence_dynamic: CDF of Q_view within investor predicted view distribution
         :param view_confidence: noise in predicted returns (investor views)
         :param noise_mode:
                 pass_through: direct
@@ -237,14 +240,17 @@ class SingleStockBLHMM(SingleStockHMM):
         """
         r_posterior = {}
         sigma_posterior = {}
+        confidence_posterior = {}
 
-        first_index = r_investor.index[0]
+        first_index = r_predicted.index[0]
         first_found = False
         t_r_eq = np.array([])
+        t_r_pred = np.array([])
         t_sigma = np.array([])
         while not first_found:
             try:
                 t_r_eq = cp.utils.time_locator(r_eq, first_index, True)
+                t_r_pred = cp.utils.time_locator(r_predicted, first_index, True)
                 t_sigma = cp.utils.time_locator(Sigma, first_index, True)
                 first_found = True
             except KeyError as e:
@@ -253,7 +259,7 @@ class SingleStockBLHMM(SingleStockHMM):
                 first_index = first_index - timedelta(days=1)
 
         # Generate posterior returns and sigma based on predictions and confidences
-        for index, row in r_investor.iterrows():
+        for index, row in r_predicted.iterrows():
             # Gather variables
             tau = (1/(1-c)) - 1  # Meucci - Risk and Asset Allocation, chapter 9.2
             P = P_view
@@ -268,9 +274,43 @@ class SingleStockBLHMM(SingleStockHMM):
 
             if noise_mode == 'pass_through':
                 Omega = O_view
-            elif noise_mode == 'confidence':
+                confidence_posterior[index] = 1
+            elif noise_mode == 'confidence_static':
                 alpha = (1 - view_confidence) / view_confidence
                 Omega = alpha * np.dot(np.dot(P, t_sigma), P.T)
+                confidence_posterior[index] = view_confidence
+            elif noise_mode == 'confidence_dynamic':
+                # Validate input
+                if len(P.shape) > 1:
+                    rows, cols = P.shape
+                    if rows > 1 and cols == 1:
+                        raise NotImplementedError('confidence_dynamic: support for multiple views not available.')
+
+                # Compute predicted return distribution for view given investor returns
+                predicted_view_mean = np.dot(P, t_r_pred)
+                predicted_view_var = np.dot(np.dot(P, t_sigma), P.T)
+
+                # Compute CDF and PDF of view return
+                if len(Q.shape) == 0:
+                    view_return = float(Q)
+                else:
+                    view_return = Q_view[0]
+                view_z_score = (view_return - predicted_view_mean) / np.sqrt(predicted_view_var)
+                view_cdf = sts.norm.cdf(view_z_score)
+                view_pdf = sts.norm.pdf(view_z_score)
+
+                # Use confidence according to view return sign
+                if view_return > 0:
+                    view_confidence = 1 - view_cdf
+                elif view_return < 0:
+                    view_confidence = view_cdf
+                else:
+                    view_confidence = view_pdf
+
+                # Construct Omega according to dynamic view confidence
+                alpha = (1 - view_confidence) / view_confidence
+                Omega = alpha * np.dot(np.dot(P, t_sigma), P.T)
+                confidence_posterior[index] = view_confidence
             else:
                 raise NotImplementedError('black_litterman_posterior_r_sigma: support only for `pass_through` and '
                                           '`confidence` modes.')
@@ -298,13 +338,15 @@ class SingleStockBLHMM(SingleStockHMM):
 
         # Convert posterior dict to DataFrame
         r_posterior_df = pd.DataFrame.from_dict(r_posterior, orient='index')
-        r_posterior_df.columns = r_investor.columns
+        r_posterior_df.columns = r_predicted.columns
 
         sigma_posterior_df = pd.concat([pd.DataFrame(v) for v in sigma_posterior.values()])
-        sigma_posterior_df.index = pd.MultiIndex.from_product([sigma_posterior.keys(), r_investor.columns])
-        sigma_posterior_df.columns = r_investor.columns
+        sigma_posterior_df.index = pd.MultiIndex.from_product([sigma_posterior.keys(), r_predicted.columns])
+        sigma_posterior_df.columns = r_predicted.columns
 
-        return r_posterior_df, sigma_posterior_df
+        confidence_posterior_df = pd.DataFrame.from_dict(confidence_posterior, orient='index')
+
+        return r_posterior_df, sigma_posterior_df, confidence_posterior_df
 
 
 if __name__ == '__main__':

@@ -116,7 +116,7 @@ for vconf in view_confidence:
                 # US outperforms Germany 4% per year - incorrect view
                 ss.predict(w_market_cap_init=w_mktcap, risk_aversion=risk_aversion, c=confidence,
                            P_view=np.array([1, 0, 0, -1, 0, 0, 0, 0, 0, 0]), Q_view=np.array(0.04 / 252),
-                           view_confidence=vconf
+                           view_confidence=vconf, noise_mode='confidence_dynamic'
                            )
 
                 logging.warning('Prediction complete')
@@ -149,7 +149,7 @@ for vconf in view_confidence:
                                                           gtrd * optimization_tcost,
                                                           gamma_hold * optimization_hcost],
                                                    constraints=[leverage_limit, fully_invested, long_only],
-                                                   trading_freq='once')
+                                                   trading_freq='hour')
 
                 # Backtest
                 blu_results = simulator.run_multiple_backtest(1E6*w_mktcap, start_time=start_date,  end_time=end_date,

@@ -116,7 +116,7 @@ for vconf in view_confidence:
                 # US underperforms Germany 4% per year - correct view
                 ss.predict(w_market_cap_init=w_mktcap, risk_aversion=risk_aversion, c=confidence,
                            P_view=np.array([-1, 0, 0, 1, 0, 0, 0, 0, 0, 0]), Q_view=np.array(0.04 / 252),
-                           view_confidence=vconf
+                           view_confidence=vconf, noise_mode='confidence_dynamic'
                            )
 
                 logging.warning('Prediction complete')
