@@ -119,7 +119,7 @@ for mode in scenario_mode:
                 # US underperforms Germany 4% per year - correct view
                 ss.predict(threshold=0.975, mode='t',
                            w_market_cap_init=w_mktcap, risk_aversion=risk_aversion, c=confidence,
-                           P_view=np.array([-1, 0, 0, 1, 0, 0, 0, 0, 0, 0]), Q_view=np.array(0.04 / 252),
+                           P_view=np.array([1, 0, 0, -1, 0, 0, 0, 0, 0, 0]), Q_view=np.array(0.04 / 252),
                            noise_mode='dynamic_sigmoid'
                            )
 
@@ -159,7 +159,6 @@ for mode in scenario_mode:
                                                           constraints=[leverage_limit, fully_invested, long_only],
                                                           scenario_mode=mode, scenario_ret_src='bl',
                                                           trading_freq=trading_freq)
-                raise Exception('let''s skip')
 
                 # Backtest
                 blu_results = simulator.run_multiple_backtest(1E6*w_mktcap, start_time=start_date,  end_time=end_date,

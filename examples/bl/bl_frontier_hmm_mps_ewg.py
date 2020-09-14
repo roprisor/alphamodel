@@ -159,7 +159,6 @@ for mode in scenario_mode:
                                                           constraints=[leverage_limit, fully_invested, long_only],
                                                           scenario_mode=mode, scenario_ret_src='bl',
                                                           trading_freq=trading_freq)
-                raise Exception('let''s skip')
 
                 # Backtest
                 blu_results = simulator.run_multiple_backtest(1E6*w_mktcap, start_time=start_date,  end_time=end_date,
