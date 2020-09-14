@@ -106,6 +106,17 @@ total_runs = len(scenario_mode) * len(gamma_risk) * len(gamma_trade)
 prtf_vs_params = {}
 run = 1
 
+# Predict
+# US outperforms Germany 4% per year - incorrect view
+start_time = time.time()
+ss.predict(threshold=0.975, mode='t',
+           w_market_cap_init=w_mktcap, risk_aversion=risk_aversion, c=confidence,
+           P_view=np.array([1, 0, 0, -1, 0, 0, 0, 0, 0, 0]), Q_view=np.array(0.04 / 252),
+           noise_mode='dynamic_sigmoid'
+           )
+end_time = time.time()
+logging.warning('Prediction complete, took {s} seconds'.format(s=str(end_time - start_time)))
+
 for mode in scenario_mode:
     for grisk in gamma_risk:
         for gtrd in gamma_trade:
@@ -115,16 +126,6 @@ for mode in scenario_mode:
             start_time = time.time()
 
             try:
-                # Predict and gather metrics
-                # US underperforms Germany 4% per year - correct view
-                ss.predict(threshold=0.975, mode='t',
-                           w_market_cap_init=w_mktcap, risk_aversion=risk_aversion, c=confidence,
-                           P_view=np.array([1, 0, 0, -1, 0, 0, 0, 0, 0, 0]), Q_view=np.array(0.04 / 252),
-                           noise_mode='dynamic_sigmoid'
-                           )
-
-                logging.warning('Prediction complete')
-
                 # Black Litterman output (HMM views included)
                 r_pred = ss.get('returns', 'predicted')
                 covariance_pred = ss.get('covariance', 'predicted')
