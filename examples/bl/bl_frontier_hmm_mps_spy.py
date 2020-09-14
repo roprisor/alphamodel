@@ -153,17 +153,17 @@ for mode in scenario_mode:
                     scns = 1
                 else:
                     scns = 10
-                bl_spo_policy = cp.MultiPeriodScenarioOpt(alphamodel=ss, horizon=5, scenarios=scns,
-                                                          costs=[gamma_risk*bl_risk_model,
-                                                                 gamma_trade*optimization_tcost,
+                bl_mps_policy = cp.MultiPeriodScenarioOpt(alphamodel=ss, horizon=5, scenarios=scns,
+                                                          costs=[grisk*bl_risk_model,
+                                                                 gtrd*optimization_tcost,
                                                                  gamma_hold*optimization_hcost],
                                                           constraints=[leverage_limit, fully_invested, long_only],
                                                           scenario_mode=mode, scenario_ret_src='bl',
                                                           trading_freq=trading_freq)
 
                 # Backtest
-                blu_results = simulator.run_multiple_backtest(1E6*w_mktcap, start_time=start_date,  end_time=end_date,
-                                                              policies=[bl_spo_policy],
+                blu_results = simulator.run_multiple_backtest(1E6 * w_mktcap, start_time=start_date, end_time=end_date,
+                                                              policies=[bl_mps_policy],
                                                               loglevel=logging.WARNING, parallel=True)
                 result = blu_results[0]
                 logging.warning(result.summary())
@@ -182,7 +182,7 @@ for mode in scenario_mode:
             prtf_df = pd.DataFrame.from_dict(prtf_vs_params, orient='index')
             prtf_df.columns = ['scenario_mode', 'horizon', 'scenarios', 'trading_freq', 'gamma_risk', 'gamma_trade',
                                'excess_return', 'excess_risk', 'max_drawdown', 'turnover']
-            prtf_df.to_csv(ss.cfg['data_dir'] + 'bl_hmm_mps_ewg_{}.csv'.format(host), index=False)
+            prtf_df.to_csv(ss.cfg['data_dir'] + 'bl_hmm_mps_spy_{}.csv'.format(host), index=False)
 
             # Print run stats and advance run
             end_time = time.time()

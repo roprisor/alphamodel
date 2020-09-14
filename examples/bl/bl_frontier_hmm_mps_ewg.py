@@ -79,8 +79,6 @@ w_mktcap = pd.Series(index=market_stats.index, data=market_stats.loc[:, 'MarketC
 w_mktcap['USDOLLAR'] = 0.
 
 # Start and end date
-# start_date = dt.datetime.strptime(config['model']['start_date'], '%Y%m%d') + \
-#                 dt.timedelta(days=config['model']['train_len']*1.75)
 start_date = dt.datetime(2005, 1, 2)
 end_date = dt.datetime.strptime(config['model']['end_date'], '%Y%m%d')
 logging.warning('Start Date: {sd} - End Date: {ed}'.format(sd=start_date.strftime('%Y%m%d'),
@@ -153,17 +151,17 @@ for mode in scenario_mode:
                     scns = 1
                 else:
                     scns = 10
-                bl_spo_policy = cp.MultiPeriodScenarioOpt(alphamodel=ss, horizon=5, scenarios=scns,
-                                                          costs=[gamma_risk*bl_risk_model,
-                                                                 gamma_trade*optimization_tcost,
+                bl_mps_policy = cp.MultiPeriodScenarioOpt(alphamodel=ss, horizon=5, scenarios=scns,
+                                                          costs=[grisk*bl_risk_model,
+                                                                 gtrd*optimization_tcost,
                                                                  gamma_hold*optimization_hcost],
                                                           constraints=[leverage_limit, fully_invested, long_only],
                                                           scenario_mode=mode, scenario_ret_src='bl',
                                                           trading_freq=trading_freq)
 
                 # Backtest
-                blu_results = simulator.run_multiple_backtest(1E6*w_mktcap, start_time=start_date,  end_time=end_date,
-                                                              policies=[bl_spo_policy],
+                blu_results = simulator.run_multiple_backtest(1E6 * w_mktcap, start_time=start_date, end_time=end_date,
+                                                              policies=[bl_mps_policy],
                                                               loglevel=logging.WARNING, parallel=True)
                 result = blu_results[0]
                 logging.warning(result.summary())
