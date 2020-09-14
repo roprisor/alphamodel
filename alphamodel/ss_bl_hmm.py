@@ -447,22 +447,20 @@ if __name__ == '__main__':
     # Optimization parameters
     gamma_risk, gamma_trade, gamma_hold = 5., 15., 1.
     leverage_limit = cp.LeverageLimit(1)
-    min_weight = cp.MinWeights(-0.5)
-    max_weight = cp.MaxWeights(0.5)
+    fully_invested = cp.ZeroCash()
     long_only = cp.LongOnly()
 
     # Optimization policy
-    c_mpc_policy = cp.ModelPredictiveControlScenarioOpt(alphamodel=bl_hmm_model, horizon=5, scenarios=5,
-                                                        scenario_mode='c', costs=[gamma_risk*spo_risk_model,
+    c_mps_policy = cp.MultiPeriodScenarioOpt(alphamodel=bl_hmm_model, horizon=5, scenarios=5,
+                                             scenario_mode='c', costs=[gamma_risk*spo_risk_model,
                                                                                   gamma_trade*optimization_tcost,
                                                                                   gamma_hold*optimization_hcost],
-                                                        constraints=[leverage_limit, min_weight, max_weight, long_only],
-                                                        return_target=0.0015, mpc_method='c',
-                                                        trading_freq='day')
+                                             constraints=[leverage_limit, fully_invested, long_only],
+                                             trading_freq='day')
 
     # Backtest
-    c_mpc_results = simulator.run_multiple_backtest(1E6*w_equal,
-                                                    start_time=start_date,  end_time=end_date,
-                                                    policies=[c_mpc_policy],
+    c_mpc_results = simulator.run_multiple_backtest(1E6 * w_equal,
+                                                    start_time=start_date, end_time=end_date,
+                                                    policies=[c_mps_policy],
                                                     loglevel=logging.INFO, parallel=True)
     c_mpc_results[0].summary()

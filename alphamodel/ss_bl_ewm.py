@@ -117,32 +117,40 @@ class SingleStockBLEWM(SingleStockEWM):
 
         return True
 
-    def generate_forward_scenario(self, dt, horizon, mode='g', **kwargs):
+    def generate_forward_scenario(self, dt, horizon, mode='g', return_src='pred', **kwargs):
         """
         Generate forward scenario
         :param dt: datetime to start at
         :param horizon: periods ahead to be included in the scenario
-        :param mode:    g = Gaussian sampled scenario (Gaussian of expected mean & sigma for values)
-                        c = constant scenario
-                        hmm = HMM sampled scenario (fit parameters to historical training data)
+        :param mode:    c = constant scenario
+                        g = Gaussian sampled scenario (Gaussian of expected mean & sigma for values)
+                        # hmm = HMM sampled scenario (fit parameters to historical training data)
+        :param return_src:  bl = Black Litterman
+                            pred = underlying quant model
         :return: Scenario() instance
         """
         if self.state != ModelState.PREDICTED:
             raise ValueError('generate_forward_scenario: Unable to run if model is not in predicted state.')
 
         # Grab needed inputs
-        returns_bl = self.get('returns', 'predicted')
-        return_sigmas_bl = self.get('covariance', 'predicted')
-        volumes_bl = self.get('volumes', 'predicted')
-        sigmas_bl = self.get('sigmas', 'predicted')
+        if return_src == 'bl':
+            returns_mean = self.get('returns', 'predicted')
+            return_sigmas_mean = self.get('covariance', 'predicted')
+        elif return_src == 'pred':
+            returns_mean = self.get('returns_ewm', 'predicted')
+            return_sigmas_mean = self.get('covariance_ewm', 'predicted')
+        else:
+            raise NotImplemented('generate_forward_scenario: Only bl and pred return_src implemented.')
+        volumes_mean = self.get('volumes', 'predicted')
+        sigmas_mean = self.get('sigmas', 'predicted')
 
         # Generate indices (dates)
-        dt_index = volumes_bl.index.get_loc(dt)
-        avail_dates = volumes_bl.shape[0] - dt_index
+        dt_index = volumes_mean.index.get_loc(dt)
+        avail_dates = volumes_mean.shape[0] - dt_index
         if avail_dates >= horizon:
-            indices = volumes_bl.index[dt_index:(dt_index + horizon)]
+            indices = volumes_mean.index[dt_index:(dt_index + horizon)]
         else:
-            real_dates = volumes_bl.index[dt_index:(dt_index + avail_dates)]
+            real_dates = volumes_mean.index[dt_index:(dt_index + avail_dates)]
             potential_dates = pd.date_range(start=real_dates[-1],
                                             end=real_dates[-1] + timedelta(days=horizon - avail_dates))
             indices = real_dates.union(potential_dates)
@@ -162,8 +170,8 @@ class SingleStockBLEWM(SingleStockEWM):
                 # Gaussian generated samples
 
                 # Generate returns - expected return & sigma
-                sym_return_mean = returns_bl.loc[dt, symbol]
-                sym_return_sigma = np.sqrt(return_sigmas_bl.loc[(dt, symbol), symbol])
+                sym_return_mean = returns_mean.loc[dt, symbol]
+                sym_return_sigma = np.sqrt(return_sigmas_mean.loc[(dt, symbol), symbol])
 
                 # Gaussian distribution of horizon length
                 rng = np.random.default_rng()
@@ -172,8 +180,8 @@ class SingleStockBLEWM(SingleStockEWM):
 
                 if symbol != self.risk_free_symbol:
                     # Generate volumes
-                    sym_volume_mean = volumes_bl.loc[dt, symbol]
-                    sym_volume_sigma = volumes_bl.loc[:dt, symbol].std()
+                    sym_volume_mean = volumes_mean.loc[dt, symbol]
+                    sym_volume_sigma = volumes_mean.loc[:dt, symbol].std()
 
                     # Gaussian distribution of horizon length
                     rng = np.random.default_rng()
@@ -181,8 +189,8 @@ class SingleStockBLEWM(SingleStockEWM):
                     volumes.loc[:, symbol] = samples
 
                     # Generate sigmas
-                    sym_sigma_mean = sigmas_bl.loc[dt, symbol]
-                    sym_sigma_sigma = sigmas_bl.loc[:dt, symbol].std()
+                    sym_sigma_mean = sigmas_mean.loc[dt, symbol]
+                    sym_sigma_sigma = sigmas_mean.loc[:dt, symbol].std()
 
                     # Gaussian distribution of horizon length
                     rng = np.random.default_rng()
@@ -191,16 +199,16 @@ class SingleStockBLEWM(SingleStockEWM):
 
             elif mode == 'c':
                 # Constant expected return
-                sym_return = returns_bl.loc[dt, symbol]
+                sym_return = returns_mean.loc[dt, symbol]
                 returns.loc[:, symbol] = sym_return
 
                 if symbol != self.risk_free_symbol:
                     # Constant expected volume
-                    sym_volume = volumes_bl.loc[dt, symbol]
+                    sym_volume = volumes_mean.loc[dt, symbol]
                     volumes.loc[:, symbol] = sym_volume
 
                     # Constant expected sigma
-                    sym_sigma = sigmas_bl.loc[dt, symbol]
+                    sym_sigma = sigmas_mean.loc[dt, symbol]
                     sigmas.loc[:, symbol] = sym_sigma
 
         # Create a scenario from the inputs
@@ -443,22 +451,20 @@ if __name__ == '__main__':
     # Optimization parameters
     gamma_risk, gamma_trade, gamma_hold = 5., 15., 1.
     leverage_limit = cp.LeverageLimit(1)
-    min_weight = cp.MinWeights(-0.5)
-    max_weight = cp.MaxWeights(0.5)
+    fully_invested = cp.ZeroCash()
     long_only = cp.LongOnly()
 
     # Optimization policy
-    c_mpc_policy = cp.ModelPredictiveControlScenarioOpt(alphamodel=bl_ewm_model, horizon=5, scenarios=5,
-                                                        scenario_mode='c', costs=[gamma_risk*spo_risk_model,
-                                                                                  gamma_trade*optimization_tcost,
-                                                                                  gamma_hold*optimization_hcost],
-                                                        constraints=[leverage_limit, min_weight, max_weight, long_only],
-                                                        return_target=0.0015, mpc_method='c',
-                                                        trading_freq='day')
+    c_mps_policy = cp.MultiPeriodScenarioOpt(alphamodel=bl_ewm_model, horizon=5, scenarios=5,
+                                             scenario_mode='c', costs=[gamma_risk*spo_risk_model,
+                                                                       gamma_trade*optimization_tcost,
+                                                                       gamma_hold*optimization_hcost],
+                                             constraints=[leverage_limit, fully_invested, long_only],
+                                             trading_freq='once')
 
     # Backtest
-    c_mpc_results = simulator.run_multiple_backtest(1E6*w_equal,
-                                                    start_time=start_date,  end_time=end_date,
-                                                    policies=[c_mpc_policy],
+    c_mpc_results = simulator.run_multiple_backtest(1E6 * w_equal,
+                                                    start_time=start_date, end_time=end_date,
+                                                    policies=[c_mps_policy],
                                                     loglevel=logging.INFO, parallel=True)
     c_mpc_results[0].summary()
