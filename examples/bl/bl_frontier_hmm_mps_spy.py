@@ -6,6 +6,7 @@
 
 import datetime as dt
 import logging
+import os
 import pandas as pd
 import numpy as np
 import socket
@@ -103,7 +104,6 @@ gamma_trade = [0.001, 0.01, 0.1, 1, 10, 100]
 gamma_hold = 0.
 total_runs = len(scenario_mode) * len(gamma_risk) * len(gamma_trade)
 
-prtf_vs_params = {}
 run = 1
 
 # Predict
@@ -122,6 +122,7 @@ for mode in scenario_mode:
         for gtrd in gamma_trade:
             # New run key
             key = 'mode_' + str(mode) + '_grisk_' + str(grisk) + '_gtrd_' + str(gtrd)
+            prtf_vs_params = {}
             logging.warning('Running for hyperparams {}'.format(key))
             start_time = time.time()
 
@@ -179,10 +180,15 @@ for mode in scenario_mode:
                 prtf_vs_params[key] = [mode, horizon, scns, trading_freq, grisk, gtrd, 0, 0, 100, 0]
 
             # Save down values in .csv
+            file_path = ss.cfg['data_dir'] + 'bl_hmm_mps_spy_{}.csv'.format(host)
             prtf_df = pd.DataFrame.from_dict(prtf_vs_params, orient='index')
             prtf_df.columns = ['scenario_mode', 'horizon', 'scenarios', 'trading_freq', 'gamma_risk', 'gamma_trade',
                                'excess_return', 'excess_risk', 'max_drawdown', 'turnover']
-            prtf_df.to_csv(ss.cfg['data_dir'] + 'bl_hmm_mps_spy_{}.csv'.format(host), index=False)
+
+            # We've already written to this file, read + append + overwrite
+            prtf_df.to_csv(file_path, index=False,
+                           header=False if os.path.isfile(file_path) else True,
+                           mode='a' if os.path.isfile(file_path) else 'w')
 
             # Print run stats and advance run
             end_time = time.time()
