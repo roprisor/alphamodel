@@ -2,6 +2,7 @@
 Single stock returns - exponentially weighted moving average model
 """
 
+import logging
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -85,7 +86,7 @@ class SingleStockEWM(Model):
             # Every first day in each biweekly period
             cov_rscore = []
             for day in first_days:
-                print('Running for {}'.format(day.strftime('%Y %b %d')))
+                logging.info('Running for {}'.format(day.strftime('%Y %b %d')))
 
                 # Grab asset returns for preceding train_days (90 by default)
                 used_returns = realized_returns.loc[(realized_returns.index < day) &
@@ -98,9 +99,9 @@ class SingleStockEWM(Model):
                 mlr.predict(used_ff_returns)
 
                 # Track performance of FF fit
-                rscore = metrics.r2_score(used_ff_returns, used_returns)
-                cov_rscore.append(rscore)
-                print('predict_cov_FF5: mlr score = {s}'.format(s=rscore))
+                # rscore = metrics.r2_score(used_ff_returns, used_returns)
+                cov_rscore.append(0)
+                #p rint('predict_cov_FF5: mlr score = {s}'.format(s=rscore))
 
                 # Factor covariance - on FF returns
                 factor_sigma[day] = used_ff_returns.cov().fillna(0)
