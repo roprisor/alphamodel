@@ -151,7 +151,8 @@ for grisk in gamma_risk:
             long_only = cp.LongOnly()
 
             # Optimization policy
-            spo_policy = cp.SinglePeriodOpt(costs=[grisk * risk_model,
+            spo_policy = cp.SinglePeriodOpt(return_forecast=r_pred,
+                                            costs=[grisk * risk_model,
                                                    gtrd * optimization_tcost,
                                                    gamma_hold * optimization_hcost],
                                             constraints=[leverage_limit, fully_invested, long_only],
