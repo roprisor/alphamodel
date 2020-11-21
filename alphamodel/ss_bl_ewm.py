@@ -1,5 +1,5 @@
 """
-Single stock returns - Black Litterman model with Hidden Markov Model generated return/variance views
+Single stock returns - Black Litterman model with exponentially weighted moving average generated return/variance views
 """
 
 import cvxportfolio as cp

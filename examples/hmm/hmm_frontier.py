@@ -70,11 +70,9 @@ logger.setLevel(logging.WARNING)
 
 ic_vs_params = {}
 
-# for hmm_mode in ['e', 't']:
 for hmm_mode in ['t']:
     for preprocess in ['None']:
-        # for train_len in range(50, 1751, 50):
-        for train_len in [1700]:
+        for train_len in range(50, 1751, 50):
             for threshold in [0.7, 0.75, 0.8, 0.85, 0.9, 0.925, 0.95, 0.96, 0.97, 0.975, 0.98, 0.985, 0.99, 0.995]:
                 # New run key                
                 key = hmm_mode + str(preprocess) + str(train_len) + str(threshold)
