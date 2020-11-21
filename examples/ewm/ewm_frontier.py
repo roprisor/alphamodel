@@ -30,7 +30,7 @@ config = {'name': 'ewm_frontier',
                'halflife': 20,
                'min_periods': 3,
                'train_len': 1700,
-               'data_dir': '/mnt/research_masc/data_store/ewma/',
+               'data_dir': '/mnt/research_masc/data_store/spo/',
                'returns':
                    {'sampling_freq': 'daily'},
                'covariance':
