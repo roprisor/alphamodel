@@ -34,7 +34,7 @@ config = {'name': 'ewm_frontier',
                'returns':
                    {'sampling_freq': 'daily'},
                'covariance':
-                   {'method': 'SS',
+                   {'method': 'FF5',
                     'sampling_freq': 'monthly',
                     'train_days': 360
                     }
@@ -95,8 +95,8 @@ confidence = 0.8
 scns = 1
 mode = ss.cfg['covariance']['method']
 trading_freq = 'week'
-gamma_risk = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 50, 100]
-gamma_trade = [0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500]
+gamma_risk = [0.001, 0.01, 0.1, 1, 10, 100]
+gamma_trade = [1, 2, 3, 4, 5]
 gamma_hold = 0.
 total_runs = len(gamma_risk) * len(gamma_trade)
 
@@ -111,11 +111,6 @@ logging.warning('Prediction complete, took {s} seconds'.format(s=str(end_time - 
 
 for grisk in gamma_risk:
     for gtrd in gamma_trade:
-        # Filter out not interesting paramter combinations
-        if gtrd <= grisk / 10 or gtrd >= 10 * grisk:
-            run += 1
-            continue
-
         # New run key
         key = 'mode_' + mode + '_grisk_' + str(grisk) + '_gtrd_' + str(gtrd)
         prtf_vs_params = {}
