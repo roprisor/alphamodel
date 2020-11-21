@@ -35,6 +35,7 @@ config = {'name': 'ewm_frontier',
                    {'sampling_freq': 'daily'},
                'covariance':
                    {'method': 'FF5',
+                    'factors': 'Developed_5_Factors_Daily',
                     'sampling_freq': 'monthly',
                     'train_days': 360
                     }

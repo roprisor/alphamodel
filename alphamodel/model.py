@@ -505,13 +505,15 @@ class Model(metaclass=ABCMeta):
 
         return True
 
-    def __fetch_factor_data(self):
+    def __fetch_factor_data(self, data_set='Developed_5_Factors_Daily'):
         """
         Training function for model
         :return:
         """
-        ds = pdr.DataReader('North_America_5_Factors_Daily', 'famafrench',
-                            start=self.cfg['start_date'], end=self.cfg['end_date'])
+        if 'factors' in self.cfg['covariance']:
+            data_set = self.cfg['covariance']['factors']
+
+        ds = pdr.DataReader(data_set, 'famafrench', start=self.cfg['start_date'], end=self.cfg['end_date'])
         ff_returns = ds[0]
         ff_returns.index = ff_returns.index.to_timestamp()
         self.set('ff_returns', ff_returns, data_type='realized', sampling_freq='daily')
