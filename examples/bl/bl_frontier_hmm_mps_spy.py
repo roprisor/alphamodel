@@ -95,14 +95,17 @@ logging.warning('Start Date: {sd} - End Date: {ed}'.format(sd=start_date.strftim
 # Search parameters
 risk_aversion = 2.5
 confidence = 0.8
-scenario_mode = ['c', 'g']
-horizon = 5
+scenario_modes = ['c', 'g']
+mode = 'c'
+horizons = [2, 5]
 scns = 1
-trading_freq = 'month'
-gamma_risk = [0.001, 0.01, 0.1, 1, 10, 100]
-gamma_trade = [0.001, 0.01, 0.1, 1, 10, 100]
+trading_freq = 'day'
+gamma_risk = [0.05, 0.1, 0.5, 1]
+gamma_trade = [0.1, 0.5, 1, 5, 10, 50, 100, 500]
+#gamma_risk = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 50, 100]
+#gamma_trade = [0.001, 0.0025, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5, 10, 50, 100, 500]
 gamma_hold = 0.
-total_runs = len(scenario_mode) * len(gamma_risk) * len(gamma_trade)
+total_runs = len(horizons) * len(gamma_risk) * len(gamma_trade)
 
 run = 1
 
@@ -117,9 +120,18 @@ ss.predict(threshold=0.975, mode='t',
 end_time = time.time()
 logging.warning('Prediction complete, took {s} seconds'.format(s=str(end_time - start_time)))
 
-for mode in scenario_mode:
+for horizon in horizons:
     for grisk in gamma_risk:
         for gtrd in gamma_trade:
+            # Only for scenario_mode == g
+            if mode == 'g' and (gtrd < 10 * grisk or gtrd > 100 * grisk):
+                run += 1
+                continue
+            # Only for scenario_mode == c
+            if mode == 'c' and (gtrd <= grisk / 10 or gtrd >= 10 * grisk):
+                run += 1
+                continue
+
             # New run key
             key = 'mode_' + str(mode) + '_grisk_' + str(grisk) + '_gtrd_' + str(gtrd)
             prtf_vs_params = {}
@@ -153,8 +165,8 @@ for mode in scenario_mode:
                 if mode == 'c':
                     scns = 1
                 else:
-                    scns = 10
-                bl_mps_policy = cp.MultiPeriodScenarioOpt(alphamodel=ss, horizon=5, scenarios=scns,
+                    scns = 5
+                bl_mps_policy = cp.MultiPeriodScenarioOpt(alphamodel=ss, horizon=horizon, scenarios=scns,
                                                           costs=[grisk*bl_risk_model,
                                                                  gtrd*optimization_tcost,
                                                                  gamma_hold*optimization_hcost],
@@ -192,6 +204,7 @@ for mode in scenario_mode:
 
             # Print run stats and advance run
             end_time = time.time()
+            logging.warning('Simulation run took {s} seconds'.format(s=str(end_time - start_time)))
             logging.warning('Run #{run}/{runs} complete. Expected time of completion: {eta}'.format(
                 run=run, runs=total_runs, eta=dt.datetime.now() +
                                               (total_runs - run) * dt.timedelta(seconds=end_time - start_time)
