@@ -2,6 +2,7 @@
 Alpha Model Base Template
 """
 
+import logging
 import pandas as pd
 import numpy as np
 import pandas_datareader.data as pdr
@@ -222,7 +223,7 @@ class Model(metaclass=ABCMeta):
             pickle.dump(self.__dict__, f, 2)
             f.close()
         except Exception as e:
-            print('save: Unable to save pickle file, {e}'.format(e=str(e)))
+            logging.error('save: Unable to save pickle file, {e}'.format(e=str(e)))
             return False
 
         return True
@@ -312,7 +313,7 @@ class Model(metaclass=ABCMeta):
         for ticker in self._universe:
             if ticker in raw_data:
                 continue
-            print('downloading %s from %s to %s' % (ticker, self.cfg['start_date'], self.cfg['end_date']))
+            logging.info('downloading %s from %s to %s' % (ticker, self.cfg['start_date'], self.cfg['end_date']))
             fetched = self.data_source.get(ticker, self.cfg['start_date'], self.cfg['end_date'],
                                            freq=sampling_freq)
             if fetched is not None:
@@ -423,7 +424,7 @@ class Model(metaclass=ABCMeta):
 
             # Filter NaNs - threshold at 2% missing values
             if len(self.__removed_assets):
-                print('%s assets %s have too many NaNs, removing them' % (str(freq), self.__removed_assets))
+                logging.warning('%s assets %s have too many NaNs, removing them' % (str(freq), self.__removed_assets))
 
                 prices = prices.loc[:, ~prices.columns.isin(self.__removed_assets)]
                 if range_avail:
@@ -435,8 +436,8 @@ class Model(metaclass=ABCMeta):
             # Fix dates on which many assets have missing values
             if len(self.__removed_dates):
                 bad_dates_idx = pd.Index(self.__removed_dates).sort_values()
-                print("Removing these days from dataset:")
-                print(pd.DataFrame({'nan price': prices.isnull().sum(1)[bad_dates_idx]}))
+                logging.warning("Removing these days from dataset:")
+                logging.warning(pd.DataFrame({'nan price': prices.isnull().sum(1)[bad_dates_idx]}))
 
                 prices = prices.loc[~prices.index.isin(bad_dates_idx)]
                 if range_avail:
@@ -447,8 +448,8 @@ class Model(metaclass=ABCMeta):
 
             # Fix prices
             if sum([x.isnull().sum().sum() for x in [prices]]) != 0:
-                print(pd.DataFrame({'remaining nan price': prices.isnull().sum()}))
-                print('Proceeding with forward fills to remove remaining NaNs')
+                logging.warning(pd.DataFrame({'remaining nan price': prices.isnull().sum()}))
+                logging.warning('Proceeding with forward fills to remove remaining NaNs')
 
             if range_avail:
                 # ### Calculate sigmas
@@ -479,7 +480,7 @@ class Model(metaclass=ABCMeta):
 
             # At this point there should be no NaNs remaining
             if sum([x.isnull().sum().sum() for x in [prices]]) != 0:
-                print(pd.DataFrame({'remaining nan price': prices.isnull().sum()}))
+                logging.warning(pd.DataFrame({'remaining nan price': prices.isnull().sum()}))
 
             # #### Compute returns
             returns = (prices.diff() / prices.shift(1)).fillna(method='ffill').iloc[1:]

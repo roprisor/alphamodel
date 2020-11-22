@@ -2,6 +2,7 @@
 Single stock returns - ex-post returns randomized by a scaling factor
 """
 
+import logging
 import numpy as np
 
 from .model import Model
@@ -54,7 +55,7 @@ class SingleStockExPost(Model):
 
         # ## Estimates
         realized_returns = self.realized['returns']
-        print("Typical variance of returns: %g" % realized_returns.var().mean())
+        logging.info("Typical variance of returns: %g" % realized_returns.var().mean())
 
         self.predicted['returns'] = self.returns_expost(realized_returns)
         self.predicted['volumes'] = self.realized['volumes'].ewm(alpha=alpha, min_periods=min_periods).mean().shift(1).\

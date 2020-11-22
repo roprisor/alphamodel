@@ -237,7 +237,7 @@ class SingleStockHMM(Model):
             # Every first day in each biweekly period
             cov_rscore = []
             for day in first_days:
-                print('Running for {}'.format(day.strftime('%Y %b %d')))
+                logging.info('Running for {}'.format(day.strftime('%Y %b %d')))
 
                 # Grab asset returns for preceding train_days (90 by default)
                 used_returns = realized_returns.loc[(realized_returns.index < day) &

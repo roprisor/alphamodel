@@ -285,6 +285,9 @@ class SingleStockBLEWM(SingleStockEWM):
                 Omega = O_view
                 confidence_posterior[index] = 1
             elif noise_mode == 'static':
+                # Confidence can't be 0, set it to 1e-6
+                if view_confidence == 0:
+                    view_confidence = 1e-6
                 alpha = (1 - view_confidence) / view_confidence
                 Omega = alpha * np.dot(np.dot(P, t_sigma), P.T)
                 confidence_posterior[index] = view_confidence

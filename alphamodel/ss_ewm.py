@@ -41,7 +41,7 @@ class SingleStockEWM(Model):
         realized_returns = self.get('returns', data_type='realized', sampling_freq=self.cfg['returns']['sampling_freq'])
         realized_volumes = self.get('volumes', data_type='realized', sampling_freq=self.cfg['returns']['sampling_freq'])
         realized_sigmas = self.get('sigmas', data_type='realized', sampling_freq=self.cfg['returns']['sampling_freq'])
-        print("Typical variance of returns: %g" % realized_returns.var().mean())
+        logging.info("Typical variance of returns: %g" % realized_returns.var().mean())
 
         self.set('returns', realized_returns.ewm(halflife=halflife, min_periods=min_periods).mean().shift(1).dropna(),
                  'predicted')
