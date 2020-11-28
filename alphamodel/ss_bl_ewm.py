@@ -217,6 +217,7 @@ class SingleStockBLEWM(SingleStockEWM):
     @staticmethod
     def black_litterman_posterior_r_sigma(P_view, Q_view, r_eq, r_predicted, c, Sigma,
                                           noise_mode='dynamic_sigmoid',
+                                          eta=1,
                                           view_confidence=0.75,
                                           O_view=np.array([])):
         """
@@ -235,6 +236,7 @@ class SingleStockBLEWM(SingleStockEWM):
                 static: Walters - alpha * P * Sigma * P.T
                 dynamic_cdf: CDF of Q_view within investor predicted view distribution
                 dynamic_sigmoid: sigmoid of Q_view within investor predicted view distribution
+        :param eta: sigmoid slope parameter
         :param view_confidence: noise in predicted returns (investor views)
         :param noise_mode:
                 pass_through: direct
@@ -343,11 +345,11 @@ class SingleStockBLEWM(SingleStockEWM):
                 # Use confidence according to view return sign
                 scalar = 10**-math.floor(math.log(view_return, 10))
                 if view_return >= 0:
-                    view_confidence = 1 / (1 + np.exp(-tau*scalar*predicted_view_mean +
-                                                      tau*scalar*view_return))
+                    view_confidence = 1 / (1 + np.exp(-eta*scalar*predicted_view_mean +
+                                                      eta*scalar*view_return))
                 else:
-                    view_confidence = 1 / (1 + np.exp(tau*scalar*predicted_view_mean +
-                                                      tau*scalar*view_return))
+                    view_confidence = 1 / (1 + np.exp(eta*scalar*predicted_view_mean +
+                                                      eta*scalar*view_return))
 
                 # Construct Omega according to dynamic view confidence
                 alpha = (1 - view_confidence) / view_confidence
