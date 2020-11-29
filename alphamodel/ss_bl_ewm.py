@@ -257,7 +257,7 @@ class SingleStockBLEWM(SingleStockEWM):
         t_r_pred = np.array([])
         t_sigma = np.array([])
 
-        tau = (1 / (1 - c)) - 1  # Meucci - Risk and Asset Allocation, chapter 9.2
+        tau = (1 / (1 - c)) - 1
         P = P_view
         Q = Q_view
 
