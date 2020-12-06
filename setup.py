@@ -15,6 +15,7 @@ setup(
     install_requires=["pandas",
                       "numpy",
                       "matplotlib",
+                      "seaborn",
                       "cvxpy>=1.0.6",
                       "cvxportfolio"],
 )
