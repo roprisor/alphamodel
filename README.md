@@ -1,21 +1,32 @@
 # alphamodel
 
+## What is alphamodel meant for?
+
 **alphamodel** is an alpha development tool meant to package data fetching, model training and model prediction.
-The base example models are designed to fetch historical data from Quandl, generate predictions (basic EWMA or 
-HMM) and estimate a covariance matrix based on direct estimation or Fama-French factor models. The base model
-outputs are standardized as inputs to the **cvxportfolio** library which can be used for portfolio optimization
-and back testing.
+The base example models are designed to:
+* fetch historical data from Quandl or csvs
+* generate predictions (basic EWMA or HMM)
+* estimate a covariance matrix based on direct estimation or Fama-French factor models.
 
-A special application of **alphamodel** is its use with Black Litterman return and risk estimates where the
-user can provide investment views in a linear combination based format and the model automatically incorporates
-them together with an EWMA or HMM based confidence level into the output return and risk estimates.
+The base model outputs are standardized as inputs to the **cvxportfolio** library which can be used for portfolio 
+optimization and back testing.
 
-If using this library please cite the upcoming paper:
-**Multi-Period Optimization with Investor Views under Regime Switching** by Razvan G. Oprisor and Roy H. Kwon
+## What else can it do?
+
+Funny you should ask. A special application of **alphamodel** is its use with Black Litterman return and risk 
+estimates where:
+* the user can provide investment views in a linear combination based format
+and
+* the model automatically incorporates them together with an EWMA or HMM based confidence level into the output 
+return and risk estimates.
 
 ## Config
 
-```alpha:
+The configuration follows a simple yml format but can also be provided directly as a nested dictionary.
+See alphamodel/examples/ for 2 sample yml files.
+
+```
+alpha:
   name: rebalance_sim
   universe:
     path: '../data/SP100_2010.csv'
@@ -39,9 +50,19 @@ If using this library please cite the upcoming paper:
     covariance:
       method: FF5
       sampling_freq: daily
-      update: monthly```
+      update: monthly
+```
 
 ## Examples
 
-Please review the **alphamodel/examples** folder for iPython notebooks with example simulations.
+Please review the **alphamodel/examples** folder for:
+1. Jupyter notebooks with sample simulations and charts similar to the paper
+2. Python scripts to rerun the full efficient frontier simulations
+
+
+## Remember to cite our paper
+
+If using this library please cite the upcoming paper:
+* **Multi-Period Optimization with Investor Views under Regime Switching** by Razvan G. Oprisor and Roy H. Kwon
+
 
