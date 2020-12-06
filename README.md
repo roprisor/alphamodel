@@ -2,28 +2,31 @@
 
 ## What is it meant for?
 
-**alphamodel** is an alpha development tool meant to package data fetching, model training and model prediction.
+`alphamodel` is an alpha development tool meant to package data fetching, model training and model prediction.
 The base example models are designed to:
 * fetch historical data from Quandl or csvs
 * generate predictions (basic EWMA or HMM)
 * estimate a covariance matrix based on direct estimation or Fama-French factor models.
 
-The base model outputs are standardized as inputs to the **cvxportfolio** library which can be used for portfolio 
+The base model outputs are standardized as inputs to the `cvxportfolio` library which can be used for portfolio 
 optimization and back testing.
 
-## Can it do anything else that's special?
+## Can it do anything special?
 
-Funny you should ask. A special application of **alphamodel** is its use with Black Litterman return and risk 
-estimates where:
+Funny you should ask, yes! A custom application of **alphamodel** is its use to tell investors when to invest in
+their views and when to hold off. To achieve this, it uses Black Litterman return and risk estimates where:
 * the user can provide investment views in a linear combination based format
 and
-* the model automatically incorporates them together with an EWMA or HMM based confidence level into the output 
-return and risk estimates.
+* the model automatically incorporates them together with an EWMA or HMM based confidence level a new set of
+output return and risk estimates.
+
+Using this new set of estimates leads to a portfolio with the views incorporated (proportional with how much
+the model thinks they're likely to be active at that time).
 
 ## Config
 
-The configuration follows a simple yml format but can also be provided directly as a nested dictionary.
-See alphamodel/examples/ for 2 sample yml files.
+The configuration follows a simple `yml` format but can also be provided directly as a nested dictionary.
+See `alphamodel/examples/` for 2 sample yml files.
 
 ```
 alpha:
@@ -55,7 +58,7 @@ alpha:
 
 ## Examples
 
-Please review the **alphamodel/examples** folder for:
+Please review the `alphamodel/examples` sub-folders for:
 1. Jupyter notebooks with sample simulations and charts similar to the paper
 2. Python scripts to rerun the full efficient frontier simulations
 
