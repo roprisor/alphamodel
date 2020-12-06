@@ -15,7 +15,7 @@ If using this library please cite the upcoming paper:
 
 ## Config
 
-alpha:
+```alpha:
   name: rebalance_sim
   universe:
     path: '../data/SP100_2010.csv'
@@ -39,7 +39,7 @@ alpha:
     covariance:
       method: FF5
       sampling_freq: daily
-      update: monthly
+      update: monthly```
 
 ## Examples
 
