@@ -1,6 +1,6 @@
 # alphamodel
 
-## What is alphamodel meant for?
+## What is it meant for?
 
 **alphamodel** is an alpha development tool meant to package data fetching, model training and model prediction.
 The base example models are designed to:
@@ -11,7 +11,7 @@ The base example models are designed to:
 The base model outputs are standardized as inputs to the **cvxportfolio** library which can be used for portfolio 
 optimization and back testing.
 
-## What else can it do?
+## Can it do anything else that's special?
 
 Funny you should ask. A special application of **alphamodel** is its use with Black Litterman return and risk 
 estimates where:
