@@ -78,8 +78,8 @@ class CsvTimeSeriesDataSet(TimeSeriesDataSet):
 
         # Public
         self.name = config['name']
-        self.na_threshold_asset = config['na_threshold_asset']
-        self.na_threshold_date = config['na_threshold_date']
+        self.na_threshold_asset = config['na_threshold_asset'] if 'na_threshold_asset' in config else 0.05
+        self.na_threshold_date = config['na_threshold_date'] if 'na_threshold_date' in config else 0.9
 
         # Private
         self.__path = config['path']
@@ -126,8 +126,8 @@ class QuandlTimeSeriesDataSet(TimeSeriesDataSet):
         self.name = config['name']
         self.table = config['table']
         self.columns = []
-        self.na_threshold_asset = config['na_threshold_asset']
-        self.na_threshold_date = config['na_threshold_date']
+        self.na_threshold_asset = config['na_threshold_asset'] if 'na_threshold_asset' in config else 0.05
+        self.na_threshold_date = config['na_threshold_date'] if 'na_threshold_date' in config else 0.9
 
         # Public optional
         self.freq = config['freq'] if 'freq' in config else None
