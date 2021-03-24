@@ -379,19 +379,23 @@ class Model(metaclass=ABCMeta):
                 volumes = self.get('volumes', data_type='realized', sampling_freq=freq)
 
             # Validate prices
-            # Filter NaNs - threshold at 2% missing values
-            bad_assets = prices.columns[prices.isnull().sum() > len(prices) * 0.02]
+            # Filter NaNs - threshold fetched from self.__data_source
+            bad_assets = prices.columns[prices.isnull().sum() > len(prices) * self.__data_source.na_threshold_asset]
             if len(bad_assets):
                 self.__removed_assets = self.__removed_assets.union(set(bad_assets))
 
             # Fix dates on which many assets have missing values
             nassets = prices.shape[1]
-            bad_dates_p = prices.index[prices.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
+            bad_dates_p = prices.index[prices.isnull().sum(1) >=
+                                       min(nassets * self.__data_source.na_threshold_date, nassets - 1)]
             if range_avail:
-                bad_dates_o = open_prices.index[open_prices.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
-                bad_dates_c = close_prices.index[close_prices.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
+                bad_dates_o = open_prices.index[open_prices.isnull().sum(1) >=
+                                                min(nassets * self.__data_source.na_threshold_date, nassets - 1)]
+                bad_dates_c = close_prices.index[close_prices.isnull().sum(1) >=
+                                                 min(nassets * self.__data_source.na_threshold_date, nassets - 1)]
             if volume_avail:
-                bad_dates_v = volumes.index[volumes.isnull().sum(1) >= min(nassets * .9, nassets - 1)]
+                bad_dates_v = volumes.index[volumes.isnull().sum(1) >=
+                                            min(nassets * self.__data_source.na_threshold_date, nassets - 1)]
 
             bad_dates = set(bad_dates_p)
             if range_avail:
@@ -422,7 +426,7 @@ class Model(metaclass=ABCMeta):
             if volume_avail:
                 volumes = self.get('volumes', data_type='realized', sampling_freq=freq)
 
-            # Filter NaNs - threshold at 2% missing values
+            # Filter NaNs - threshold fetched from self.__data_source
             if len(self.__removed_assets):
                 logging.warning('%s assets %s have too many NaNs, removing them' % (str(freq), self.__removed_assets))
 

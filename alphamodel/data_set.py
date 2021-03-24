@@ -44,9 +44,9 @@ class TimeSeriesDataSet(metaclass=ABCMeta):
             raise ValueError('Data source type input can only be string or int.')
 
         if ds_type == TimeSeriesDataSetType.CSV:
-            return CsvTimeSeriesDataSet(config)
+            return CsvTimeSeriesDataSet(config, na_threshold_asset=0.05, na_threshold_date=0.8)
         elif ds_type == TimeSeriesDataSetType.QUANDL:
-            return QuandlTimeSeriesDataSet(config)
+            return QuandlTimeSeriesDataSet(config, na_threshold_asset=0.05, na_threshold_date=0.8)
         else:
             raise NotImplementedError('{} data source has not been implemented yet.')
 
@@ -66,7 +66,7 @@ class CsvTimeSeriesDataSet(TimeSeriesDataSet):
     """
     Data Set - Csv Type
     """
-    def __init__(self, config):
+    def __init__(self, config, na_threshold_asset, na_threshold_date):
         """
         Initialize from config
         :param config:
@@ -76,12 +76,17 @@ class CsvTimeSeriesDataSet(TimeSeriesDataSet):
         elif 'path' not in config:
             raise ValueError('Csv data source requires data \'path\' to be configured.')
 
+        # Public
+        self.name = config['name']
+        self.na_threshold_asset = na_threshold_asset
+        self.na_threshold_date = na_threshold_date
+
+        # Private
         self.__path = config['path']
-        self.__name = config['name']
         self.__dt_col = config['dt_column']
         self.__dt_format = config['dt_format']
 
-    def get(self, financial_asset, start_date, end_date, cols=None):
+    def get(self, financial_asset, start_date, end_date, cols=None, freq=None):
         """
 
         :param financial_asset:
@@ -105,7 +110,7 @@ class QuandlTimeSeriesDataSet(TimeSeriesDataSet):
     """
     Data Set - Quandl Type
     """
-    def __init__(self, config):
+    def __init__(self, config, na_threshold_asset, na_threshold_date):
         """
         Initialize from config
         :param config:
@@ -117,13 +122,18 @@ class QuandlTimeSeriesDataSet(TimeSeriesDataSet):
         elif 'api_key' not in config:
             raise ValueError('Quandl data source requires \'api_key\' to be configured.')
 
-        self.__name = config['name']
-        self.__table = config['table']
-        self.__api_key = config['api_key']
+        # Public
+        self.name = config['name']
+        self.table = config['table']
         self.columns = []
+        self.na_threshold_asset = na_threshold_asset
+        self.na_threshold_date = na_threshold_date
 
-        # Optional configs
+        # Public optional
         self.freq = config['freq'] if 'freq' in config else None
+
+        # Private
+        self.__api_key = config['api_key']
 
     def to_quandl_ticker(self, ticker):
         """
