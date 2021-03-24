@@ -66,7 +66,7 @@ class CsvTimeSeriesDataSet(TimeSeriesDataSet):
     """
     Data Set - Csv Type
     """
-    def __init__(self, config, na_threshold_asset, na_threshold_date):
+    def __init__(self, config):
         """
         Initialize from config
         :param config:
@@ -110,7 +110,7 @@ class QuandlTimeSeriesDataSet(TimeSeriesDataSet):
     """
     Data Set - Quandl Type
     """
-    def __init__(self, config, na_threshold_asset, na_threshold_date):
+    def __init__(self, config):
         """
         Initialize from config
         :param config:
