@@ -140,7 +140,7 @@ class QuandlTimeSeriesDataSet(TimeSeriesDataSet):
         Converts ticker to format in Quandl dataset
         """
         if 'USDOLLAR' not in ticker:
-            return self.__table + '/' + ticker.replace('.', '_')
+            return self.table + '/' + ticker.replace('.', '_')
         else:
             return 'FRED/DTB3'
 
