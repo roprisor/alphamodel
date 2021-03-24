@@ -409,10 +409,13 @@ class Model(metaclass=ABCMeta):
 
             # Compute returns
             returns = (prices.diff() / prices.shift(1)).fillna(method='ffill').iloc[1:]
-            bad_assets = returns.columns[((-.5 > returns).sum() > 0) | ((returns > 2.).sum() > 0)]
+            bad_assets = returns.columns[((self.__data_source.return_min > returns).sum() > 0) |
+                                         ((returns > self.__data_source.return_max).sum() > 0)]
 
             # Maintain list of removed assets across all data fetches
-            if len(bad_assets):
+            if self.__data_source.return_check_on and len(bad_assets):
+                logging.warning('%s assets have returns out of (%.1f, %.1f), removing them' % \
+                                (bad_assets, self.__data_source.return_min, self.__data_source.return_max))
                 self.__removed_assets = self.__removed_assets.union(set(bad_assets))
 
         # Now that all validation is complete, filter out the bad assets/dates across all sampling frequencies &
@@ -441,7 +444,7 @@ class Model(metaclass=ABCMeta):
             if len(self.__removed_dates):
                 bad_dates_idx = pd.Index(self.__removed_dates).sort_values()
                 logging.warning("Removing these days from dataset:")
-                logging.warning(pd.DataFrame({'nan price': prices.isnull().sum(1)[bad_dates_idx]}))
+                logging.warning(pd.DataFrame({'nan price': prices.isnull().sum(1)}))
 
                 prices = prices.loc[~prices.index.isin(bad_dates_idx)]
                 if range_avail:

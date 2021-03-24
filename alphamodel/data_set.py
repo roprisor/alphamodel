@@ -7,6 +7,7 @@ import quandl
 
 from abc import ABCMeta, abstractmethod
 from enum import Enum
+from datetime import datetime
 
 __all__ = ['TimeSeriesDataSetType', 'TimeSeriesDataSet', 'CsvTimeSeriesDataSet', 'QuandlTimeSeriesDataSet',
            'QuandlSamplingFrequency']
@@ -80,6 +81,9 @@ class CsvTimeSeriesDataSet(TimeSeriesDataSet):
         self.name = config['name']
         self.na_threshold_asset = config['na_threshold_asset'] if 'na_threshold_asset' in config else 0.05
         self.na_threshold_date = config['na_threshold_date'] if 'na_threshold_date' in config else 0.9
+        self.return_check_on = config['return_check_on'] if 'return_check_on' in config else True
+        self.return_min = config['return_min'] if 'return_min' in config else -0.5
+        self.return_max = config['return_max'] if 'return_max' in config else 2
 
         # Private
         self.__path = config['path']
@@ -128,6 +132,9 @@ class QuandlTimeSeriesDataSet(TimeSeriesDataSet):
         self.columns = []
         self.na_threshold_asset = config['na_threshold_asset'] if 'na_threshold_asset' in config else 0.05
         self.na_threshold_date = config['na_threshold_date'] if 'na_threshold_date' in config else 0.9
+        self.return_check_on = config['return_check_on'] if 'return_check_on' in config else True
+        self.return_min = config['return_min'] if 'return_min' in config else -0.5
+        self.return_max = config['return_max'] if 'return_max' in config else 2
 
         # Public optional
         self.freq = config['freq'] if 'freq' in config else None
