@@ -44,9 +44,9 @@ class TimeSeriesDataSet(metaclass=ABCMeta):
             raise ValueError('Data source type input can only be string or int.')
 
         if ds_type == TimeSeriesDataSetType.CSV:
-            return CsvTimeSeriesDataSet(config, na_threshold_asset=0.05, na_threshold_date=0.8)
+            return CsvTimeSeriesDataSet(config)
         elif ds_type == TimeSeriesDataSetType.QUANDL:
-            return QuandlTimeSeriesDataSet(config, na_threshold_asset=0.05, na_threshold_date=0.8)
+            return QuandlTimeSeriesDataSet(config)
         else:
             raise NotImplementedError('{} data source has not been implemented yet.')
 
@@ -78,8 +78,8 @@ class CsvTimeSeriesDataSet(TimeSeriesDataSet):
 
         # Public
         self.name = config['name']
-        self.na_threshold_asset = na_threshold_asset
-        self.na_threshold_date = na_threshold_date
+        self.na_threshold_asset = config['na_threshold_asset']
+        self.na_threshold_date = config['na_threshold_date']
 
         # Private
         self.__path = config['path']
@@ -126,8 +126,8 @@ class QuandlTimeSeriesDataSet(TimeSeriesDataSet):
         self.name = config['name']
         self.table = config['table']
         self.columns = []
-        self.na_threshold_asset = na_threshold_asset
-        self.na_threshold_date = na_threshold_date
+        self.na_threshold_asset = config['na_threshold_asset']
+        self.na_threshold_date = config['na_threshold_date']
 
         # Public optional
         self.freq = config['freq'] if 'freq' in config else None
