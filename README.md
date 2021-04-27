@@ -66,6 +66,6 @@ Please review the `alphamodel/examples` sub-folders for:
 ## Remember to cite our paper
 
 If using this library please cite the upcoming paper:
-* **Multi-Period Optimization with Investor Views under Regime Switching** by Razvan G. Oprisor and Roy H. Kwon
+* **Multi-Period Optimization with Investor Views under Regime Switching** by Razvan G. Oprisor and Roy H. Kwon, J. Risk Financial Manag. 2021, 14(1), 3; https://doi.org/10.3390/jrfm14010003
 
 
