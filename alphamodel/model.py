@@ -376,9 +376,9 @@ class Model(metaclass=ABCMeta):
         :return:
         """
         range_avail = ('Open' in self.data_source.columns and 'Close' in self.data_source.columns) or \
-            self.cfg['allow_value_only']
+                      ('allow_value_only' in self.cfg and self.cfg['allow_value_only'])
         volume_avail = ('Volume' in self.data_source.columns or 'Adj_Volume' in self.data_source.columns) or \
-            self.cfg['allow_value_only']
+                       ('allow_value_only' in self.cfg and self.cfg['allow_value_only'])
 
         # For each sampling frequency, validate the data & store problem assets/dates
         for freq in self._realized:
