@@ -164,7 +164,7 @@ class SingleStockEWM(Model):
         win_rate_all = pd.DataFrame(index=horizons)
 
         # Compute win rate for each symbol
-        for symbol in returns_pred.columns:
+        for symbol in [col for col in returns_pred.columns if col != 'USDOLLAR']:
             win_rate = []
             for horizon in horizons:
                 win_rate.append(SingleStockEWM.win_rate_symbol_horizon(returns_pred, returns_real, symbol, horizon))
@@ -197,6 +197,6 @@ class SingleStockEWM(Model):
 
 if __name__ == '__main__':
     ss_ewm_model = SingleStockEWM('../examples/cvxpt_ewm.yml')
-    ss_ewm_model.train()
+    ss_ewm_model.train(force=True)
     ss_ewm_model.predict()
     ss_ewm_model.prediction_quality()

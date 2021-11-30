@@ -1,25 +1,34 @@
 alpha:
-  name: rebalance_sim
+  name: commods
   universe:
-    path: '../data/SP100_2010.csv'
-    ticker_col: Symbol
+    'list':
+    - WPUSI019011
+    - WPU102105
+    - WPU0121
+    - WPU0151
+    - WPU0131
+    - WPU0561
     risk_free_symbol: USDOLLAR
   drop_threshold: 0.5
   data:
-    name: eod_returns
+    name: commods
     source: quandl
-    table: EOD
-    api_key: 6XyApK2BBj_MraQg2TMD
+    table: FRED
+    api_key: NA
+    na_threshold_asset: 0.97
+    na_threshold_date: 0.95
+    return_check_on: False
   model:
-    start_date: '20100102'
+    start_date: '19750101'
     end_date: '20171231'
     data_dir: '../data/'
-    halflife: 4
+    halflife: 6
     horizon: 1
-    min_periods: 4
+    min_periods: 12
+    allow_value_only: True
     returns:
-      sampling_freq: weekly
+      sampling_freq: monthly
     covariance:
-      method: FF5
-      sampling_freq: daily
+      method: SS
+      sampling_freq: monthly
       update: monthly

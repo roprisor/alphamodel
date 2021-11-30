@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='alphamodel',
-    version='0.0.2',
+    version='0.0.3',
     author='Razvan Oprisor',
     author_email='razvan.oprisor@mail.utoronto.ca',
     packages=find_packages(),

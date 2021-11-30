@@ -342,6 +342,10 @@ class Model(metaclass=ABCMeta):
 
             self.set('open_prices', open_prices, data_type='realized', sampling_freq=sampling_freq)
             self.set('close_prices', close_prices, data_type='realized', sampling_freq=sampling_freq)
+        else:
+            self.set('open_prices', prices * 0.99, data_type='realized', sampling_freq=sampling_freq)
+            self.set('close_prices', prices, data_type='realized', sampling_freq=sampling_freq)
+            logging.warning('Open/Close columns are missing, replacing with flat 1% open/close volatility')
 
         if 'Volume' in self.data_source.columns or 'Adj_Volume' in self.data_source.columns:
             # extract volumes
@@ -350,6 +354,12 @@ class Model(metaclass=ABCMeta):
                                                              for k in keys])))
 
             self.set('volumes', volumes, data_type='realized', sampling_freq=sampling_freq)
+        else:
+            volumes = prices.copy(deep=True)
+            for col in volumes.columns:
+                volumes[col].values[:] = 1e9
+            self.set('volumes', volumes, data_type='realized', sampling_freq=sampling_freq)
+            logging.warning('Volume columns are missing, replacing with 1bn shares/contracts')
 
         # fix risk free
         prices[self.risk_free_symbol] = 10000 * (1 + prices[self.risk_free_symbol] / (100 * 250)).cumprod()
@@ -365,8 +375,10 @@ class Model(metaclass=ABCMeta):
         Validate and sync up return data
         :return:
         """
-        range_avail = 'Open' in self.data_source.columns and 'Close' in self.data_source.columns
-        volume_avail = 'Volume' in self.data_source.columns or 'Adj_Volume' in self.data_source.columns
+        range_avail = ('Open' in self.data_source.columns and 'Close' in self.data_source.columns) or \
+            self.cfg['allow_value_only']
+        volume_avail = ('Volume' in self.data_source.columns or 'Adj_Volume' in self.data_source.columns) or \
+            self.cfg['allow_value_only']
 
         # For each sampling frequency, validate the data & store problem assets/dates
         for freq in self._realized:
@@ -489,8 +501,9 @@ class Model(metaclass=ABCMeta):
             if sum([x.isnull().sum().sum() for x in [prices]]) != 0:
                 logging.warning(pd.DataFrame({'remaining nan price': prices.isnull().sum()}))
 
-            # #### Compute returns
+            # #### Compute returns & fill NaNs
             returns = (prices.diff() / prices.shift(1)).fillna(method='ffill').iloc[1:]
+            returns = returns.replace([np.inf, -np.inf], np.nan).fillna(0)
 
             # Remove USDOLLAR except from returns
             prices = prices.iloc[:, :-1]

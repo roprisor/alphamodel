@@ -79,6 +79,7 @@ class CsvTimeSeriesDataSet(TimeSeriesDataSet):
 
         # Public
         self.name = config['name']
+        self.columns = []
         self.na_threshold_asset = config['na_threshold_asset'] if 'na_threshold_asset' in config else 0.05
         self.na_threshold_date = config['na_threshold_date'] if 'na_threshold_date' in config else 0.9
         self.return_check_on = config['return_check_on'] if 'return_check_on' in config else True
@@ -90,6 +91,15 @@ class CsvTimeSeriesDataSet(TimeSeriesDataSet):
         self.__dt_col = config['dt_column']
         self.__dt_format = config['dt_format']
 
+    def to_csv_ticker(self, ticker):
+        """
+        Converts ticker to format in CSV storage
+        """
+        if 'USDOLLAR' not in ticker:
+            return ticker
+        else:
+            return 'DTB3'
+
     def get(self, financial_asset, start_date, end_date, cols=None, freq=None):
         """
 
@@ -99,7 +109,7 @@ class CsvTimeSeriesDataSet(TimeSeriesDataSet):
         :param cols:
         :return:
         """
-        loaded = pd.read_csv(self.__path + '/' + str(financial_asset) + '.csv')
+        loaded = pd.read_csv(self.__path + '/' + str(self.to_csv_ticker(financial_asset)) + '.csv')
         loaded.loc[:, self.__dt_col] = [datetime.strptime(dt, self.__dt_format) for dt in loaded.loc[:, self.__dt_col]]
         loaded.set_index(self.__dt_col, inplace=True)
         loaded = loaded[(loaded.index >= start_date) & (loaded.index <= end_date)]
@@ -107,6 +117,9 @@ class CsvTimeSeriesDataSet(TimeSeriesDataSet):
             if isinstance(cols, str):
                 cols = [cols]
             loaded = loaded[cols]
+            self.columns = cols
+        else:
+            self.columns = loaded.columns
         return loaded
 
 
