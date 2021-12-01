@@ -14,12 +14,12 @@ alpha:
     name: commods
     source: quandl
     table: FRED
-    api_key: NA
+    api_key: FUCTkpiUgvDWk6faUD9J
     na_threshold_asset: 0.97
     na_threshold_date: 0.95
     return_check_on: False
   model:
-    start_date: '19750101'
+    start_date: '19860101'
     end_date: '20171231'
     data_dir: '../data/'
     halflife: 6
