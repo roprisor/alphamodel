@@ -7,6 +7,7 @@ import pandas as pd
 import quandl
 
 from abc import ABCMeta, abstractmethod
+from datetime import datetime
 from enum import Enum
 
 __all__ = ['TimeSeriesDataSetType', 'TimeSeriesDataSet', 'CsvTimeSeriesDataSet', 'QuandlTimeSeriesDataSet',
