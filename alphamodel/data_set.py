@@ -118,7 +118,9 @@ class CsvTimeSeriesDataSet(TimeSeriesDataSet):
 
         # Apply required data frequency
         if freq is not None:
-            if freq == 'weekly':
+            if freq == 'daily':
+                loaded = loaded.resample('D').agg('last')
+            elif freq == 'weekly':
                 loaded = loaded.resample('W').agg('last')
             elif freq == 'monthly':
                 loaded = loaded.resample('M').agg('last')
