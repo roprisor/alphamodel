@@ -128,7 +128,7 @@ class CsvTimeSeriesDataSet(TimeSeriesDataSet):
                 raise ValueError('CSV data source only supports freq: daily, weekly, monthly or quarterly.')
 
         # Replace all misformatted data with NaN
-        loaded[loaded.applymap(lambda x: not np.real(x))] = np.nan
+        loaded = loaded.apply(lambda x: pd.to_numeric(x, errors='coerce'))
 
         # Extract columns of interest
         if cols is not None:
