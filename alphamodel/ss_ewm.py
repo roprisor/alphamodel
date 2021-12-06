@@ -196,7 +196,7 @@ class SingleStockEWM(Model):
 
 
 if __name__ == '__main__':
-    ss_ewm_model = SingleStockEWM('../examples/cvxpt_ewm.yml')
+    ss_ewm_model = SingleStockEWM('../examples/cvxpt_csv.yml')
     ss_ewm_model.train(force=True)
     ss_ewm_model.predict()
     ss_ewm_model.prediction_quality()

@@ -1,7 +1,7 @@
 alpha:
   name: commods
   universe:
-    'list':
+    list:
     - WPUSI019011
     - WPU102105
     - WPU0121

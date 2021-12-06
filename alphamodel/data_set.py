@@ -2,12 +2,12 @@
 Data Source - Data Input Manager
 """
 import logging
+import numpy as np
 import pandas as pd
 import quandl
 
 from abc import ABCMeta, abstractmethod
 from enum import Enum
-from datetime import datetime
 
 __all__ = ['TimeSeriesDataSetType', 'TimeSeriesDataSet', 'CsvTimeSeriesDataSet', 'QuandlTimeSeriesDataSet',
            'QuandlSamplingFrequency']
@@ -109,10 +109,27 @@ class CsvTimeSeriesDataSet(TimeSeriesDataSet):
         :param cols:
         :return:
         """
+        # Read in data, process date, filter by date range
         loaded = pd.read_csv(self.__path + '/' + str(self.to_csv_ticker(financial_asset)) + '.csv')
         loaded.loc[:, self.__dt_col] = [datetime.strptime(dt, self.__dt_format) for dt in loaded.loc[:, self.__dt_col]]
         loaded.set_index(self.__dt_col, inplace=True)
         loaded = loaded[(loaded.index >= start_date) & (loaded.index <= end_date)]
+
+        # Apply required data frequency
+        if freq is not None:
+            if freq == 'weekly':
+                loaded = loaded.resample('W').agg('last')
+            elif freq == 'monthly':
+                loaded = loaded.resample('M').agg('last')
+            elif freq == 'quarterly':
+                loaded = loaded.resample('Q').agg('last')
+            else:
+                raise ValueError('CSV data source only supports freq: daily, weekly, monthly or quarterly.')
+
+        # Replace all misformatted data with NaN
+        loaded[loaded.applymap(lambda x: not np.real(x))] = np.nan
+
+        # Extract columns of interest
         if cols is not None:
             if isinstance(cols, str):
                 cols = [cols]
