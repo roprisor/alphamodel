@@ -11,7 +11,7 @@ alpha:
     name: eod_returns
     source: quandl
     table: EOD
-    api_key: 6XyApK2BBj_MraQg2TMD
+    api_key: oX29nKHyj4HE_qujSzY2
   model:
     start_date: '19970102'
     end_date: '20021231'
