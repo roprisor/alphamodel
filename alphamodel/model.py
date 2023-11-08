@@ -313,7 +313,6 @@ class Model(metaclass=ABCMeta):
         for ticker in self._universe:
             if ticker in raw_data:
                 continue
-            print('*** HERE ***')
             logging.info('downloading %s from %s to %s' % (ticker, self.cfg['start_date'], self.cfg['end_date']))
             fetched = self.data_source.get(ticker, self.cfg['start_date'], self.cfg['end_date'],
                                            freq=sampling_freq)
@@ -535,10 +534,14 @@ class Model(metaclass=ABCMeta):
         if 'factors' in self.cfg['covariance']:
             data_set = self.cfg['covariance']['factors']
 
+        print('*** HERE 1 ***')
+
         ds = pdr.DataReader(data_set, 'famafrench', start=self.cfg['start_date'], end=self.cfg['end_date'])
         ff_returns = ds[0]
         ff_returns.index = ff_returns.index.to_timestamp()
         self.set('ff_returns', ff_returns, data_type='realized', sampling_freq='daily')
+
+        print('*** HERE 2 ***')
 
         return True
 
