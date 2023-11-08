@@ -14,7 +14,7 @@ alpha:
     name: commods
     source: quandl
     table: FRED
-    api_key: FUCTkpiUgvDWk6faUD9J
+    api_key: oX29nKHyj4HE_qujSzY2
     na_threshold_asset: 0.97
     na_threshold_date: 0.95
     return_check_on: False
