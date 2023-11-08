@@ -313,6 +313,7 @@ class Model(metaclass=ABCMeta):
         for ticker in self._universe:
             if ticker in raw_data:
                 continue
+            print('*** HERE ***')
             logging.info('downloading %s from %s to %s' % (ticker, self.cfg['start_date'], self.cfg['end_date']))
             fetched = self.data_source.get(ticker, self.cfg['start_date'], self.cfg['end_date'],
                                            freq=sampling_freq)
