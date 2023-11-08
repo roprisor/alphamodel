@@ -4,7 +4,7 @@ setup(
     name='alphamodel',
     version='0.0.3',
     author='Razvan Oprisor',
-    author_email='razvan.oprisor@mail.utoronto.ca',
+    author_email='marlon.pineros@fiduciariacorficolombiana.com',
     packages=find_packages(),
     package_dir={'alphamodel': 'alphamodel'},
     package_data={'': ['*.csv', '*.yml']},
